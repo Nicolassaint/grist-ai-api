@@ -58,11 +58,23 @@ show_help() {
 check_prerequisites() {
     log_info "Vérification des prérequis..."
     
-    # Vérification de Python
-    if ! command -v python3 &> /dev/null; then
-        log_error "Python3 n'est pas installé"
+    # Vérification de Conda
+    if ! command -v conda &> /dev/null; then
+        log_error "Conda n'est pas installé ou pas dans le PATH"
         exit 1
     fi
+    
+    # Initialisation de Conda pour bash
+    log_info "Initialisation de l'environnement Conda..."
+    eval "$(conda shell.bash hook)"
+    
+    # Activation de l'environnement finetune
+    log_info "Activation de l'environnement Conda 'finetune'..."
+    conda activate finetune || {
+        log_error "Impossible d'activer l'environnement conda 'finetune'"
+        log_info "Créez l'environnement avec : conda create -n finetune python=3.10"
+        exit 1
+    }
     
     # Vérification du fichier .env
     if [[ ! -f "$PROJECT_DIR/.env" ]]; then
@@ -70,17 +82,7 @@ check_prerequisites() {
         exit 1
     fi
     
-    # Installation des dépendances Python si requirements.txt existe
-    if [[ -f "$PROJECT_DIR/requirements.txt" ]]; then
-        log_info "Installation des dépendances Python..."
-        cd "$PROJECT_DIR"
-        pip install -r requirements.txt > /dev/null 2>&1 || {
-            log_error "Erreur lors de l'installation des dépendances"
-            exit 1
-        }
-    fi
-    
-    log_success "Prérequis vérifiés"
+    log_success "Prérequis vérifiés (environnement conda 'finetune' activé)"
 }
 
 # Fonction pour démarrer l'API
@@ -106,6 +108,10 @@ start_api() {
     cd "$PROJECT_DIR"
 
     log_info "Déploiement de l'API Widget IA Grist en PRODUCTION sur le port $PORT..."
+
+    # S'assurer que l'environnement conda est activé
+    eval "$(conda shell.bash hook)"
+    conda activate finetune
 
     # Commande de base avec variables d'environnement
     local cmd="python -m app.main"
