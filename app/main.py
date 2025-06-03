@@ -83,22 +83,11 @@ async def root():
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Gestionnaire personnalisé pour les erreurs de validation"""
-    request_id = str(uuid.uuid4())
-    
-    # Log des détails de l'erreur de validation
-    logger.error(
-        "Erreur de validation de requête",
-        request_id=request_id,
-        method=request.method,
-        url=str(request.url),
-        validation_errors=exc.errors(),
-        raw_body=await get_raw_body(request)
-    )
+    logger.error(f"Validation échouée", path=request.url.path, errors=len(exc.errors()))
     
     return {
         "detail": "Erreur de validation des données",
-        "errors": exc.errors(),
-        "request_id": request_id
+        "errors": exc.errors()
     }
 
 
@@ -115,161 +104,57 @@ async def get_raw_body(request: Request) -> str:
 async def chat_endpoint(request: Request):
     """
     Endpoint principal pour traiter les requêtes conversationnelles
-    
-    Args:
-        request: Requête HTTP brute pour debug
-        
-    Returns:
-        ChatResponse: Réponse structurée avec le résultat du traitement
     """
-    request_id = str(uuid.uuid4())
-    
     try:
-        # Lecture du corps brut pour debug
+        # Lecture et parsing du JSON
         raw_body = await request.body()
-        logger.info(
-            "Requête /chat - Corps brut reçu",
-            request_id=request_id,
-            raw_body_length=len(raw_body),
-            raw_body_complete=raw_body.decode('utf-8')  # Affichage complet pour debug
-        )
         
-        # Parsing JSON manuel pour debug
         try:
             json_data = json.loads(raw_body.decode('utf-8'))
-            logger.info(
-                "Parsing JSON réussi",
-                request_id=request_id,
-                json_type=type(json_data).__name__,
-                json_keys=list(json_data.keys()) if isinstance(json_data, dict) else "N/A",
-                json_length=len(json_data) if isinstance(json_data, (list, dict)) else "N/A"
-            )
         except json.JSONDecodeError as e:
-            logger.error(
-                "Erreur parsing JSON",
-                request_id=request_id,
-                json_error=str(e)
-            )
-            raise HTTPException(
-                status_code=400,
-                detail=f"JSON invalide: {str(e)}"
-            )
+            logger.error(f"JSON invalide: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"JSON invalide: {str(e)}")
         
-        # Construction de la requête Grist à partir des éléments HTTP
+        # Construction de la requête Grist
         try:
-            # Récupération des headers HTTP
-            headers_dict = dict(request.headers)
-            
-            # Récupération des paramètres de query
-            query_params = dict(request.query_params)
-            
-            # Le JSON reçu est traité comme le body
             grist_request_data = {
-                "headers": headers_dict,
-                "params": {},  # Pas de params dans le path pour ce endpoint
-                "query": query_params,
-                "body": json_data  # Le JSON reçu devient le body
+                "headers": dict(request.headers),
+                "params": {},
+                "query": dict(request.query_params),
+                "body": json_data
             }
             
-            # Validation Pydantic avec la structure complète
             grist_request = GristRequest(**grist_request_data)
                 
-            logger.info(
-                "Construction requête Grist réussie",
-                request_id=request_id,
-                headers_count=len(headers_dict),
-                query_params_count=len(query_params),
-                body_keys=list(json_data.keys()) if isinstance(json_data, dict) else "N/A"
-            )
-            
         except Exception as e:
-            logger.error(
-                "Erreur construction requête Grist",
-                request_id=request_id,
-                construction_error=str(e),
-                json_data_keys=list(json_data.keys()) if isinstance(json_data, dict) else "N/A"
-            )
-            raise HTTPException(
-                status_code=422,
-                detail=f"Erreur construction requête: {str(e)}"
-            )
+            logger.error(f"Erreur construction requête", error=str(e)[:100])
+            raise HTTPException(status_code=422, detail=f"Erreur construction requête: {str(e)}")
         
-        # Validation de la requête
-        if not grist_request:
-            raise HTTPException(
-                status_code=400, 
-                detail="Requête Grist invalide"
-            )
+        # Log concis de la requête
+        logger.log_chat_request(grist_request.body.documentId, len(grist_request.body.messages))
         
-        logger.info(
-            "Nouvelle requête /chat validée",
-            request_id=request_id,
-            document_id=grist_request.body.documentId,
-            execution_mode=grist_request.body.executionMode,
-            nb_messages=len(grist_request.body.messages)
-        )
-        
-        # Extraction de la clé API Grist depuis le header x-api-key
+        # Extraction de la clé API et traitement
         grist_api_key = grist_request.headers.get("x-api-key")
-        
-        # Conversion vers le format interne
-        processed_request = ProcessedRequest.from_grist_request(
-            grist_request, 
-            grist_api_key
-        )
+        processed_request = ProcessedRequest.from_grist_request(grist_request, grist_api_key)
         
         # Traitement par l'orchestrateur
         response = await orchestrator.process_chat_request(processed_request)
         
-        # Logs détaillés du résultat final
-        logger.info(
-            "🔍 Résultat final du traitement",
-            request_id=request_id,
-            agent_used=response.agent_used,
-            response_length=len(response.response),
-            response_preview=response.response[:200] + "..." if len(response.response) > 200 else response.response,
-            sql_query=response.sql_query,
-            data_analyzed=response.data_analyzed,
-            has_error=response.error is not None
-        )
+        # Log concis du résultat
+        logger.log_chat_response(response.agent_used, len(response.response), bool(response.error))
         
         if response.sql_query:
-            logger.info(
-                "📊 Requête SQL générée",
-                request_id=request_id,
-                sql_query=response.sql_query
-            )
-        
-        if response.error:
-            logger.warning(
-                "⚠️ Erreur dans la réponse",
-                request_id=request_id,
-                error=response.error
-            )
-        
-        logger.info(
-            "Requête /chat traitée avec succès",
-            request_id=request_id,
-            agent_used=response.agent_used,
-            response_length=len(response.response)
-        )
+            logger.log_sql_generation(response.sql_query, 1)  # tables_count approximatif
         
         return response
         
     except HTTPException:
-        # Re-raise les HTTPException
         raise
         
     except Exception as e:
-        logger.error(
-            f"Erreur lors du traitement /chat: {str(e)}",
-            request_id=request_id
-        )
-        
-        # Retour d'une réponse d'erreur mais pas d'exception HTTP
-        # pour éviter de casser l'intégration Grist
+        logger.error(f"Erreur inattendue", error=str(e)[:100])
         return ChatResponse(
-            response=f"Désolé, j'ai rencontré une erreur technique : {str(e)}",
+            response=f"Erreur technique : {str(e)}",
             agent_used="error",
             error=str(e)
         )
@@ -384,29 +269,14 @@ async def list_agents():
 # Middleware pour logging des requêtes
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Middleware pour logger toutes les requêtes HTTP"""
-    
-    # Génération d'un ID de requête
-    request_id = str(uuid.uuid4())
-    
-    # Log de la requête entrante
-    logger.info(
-        "Requête HTTP entrante",
-        request_id=request_id,
-        method=request.method,
-        url=str(request.url),
-        client_ip=request.client.host if request.client else "unknown"
-    )
+    """Middleware pour logger les requêtes importantes"""
     
     # Traitement de la requête
     response = await call_next(request)
     
-    # Log de la réponse
-    logger.info(
-        "Réponse HTTP sortante",
-        request_id=request_id,
-        status_code=response.status_code
-    )
+    # Log seulement pour les endpoints importants
+    if request.url.path in ["/chat", "/health", "/stats"]:
+        logger.log_request(request.method, request.url.path, response.status_code)
     
     return response
 
