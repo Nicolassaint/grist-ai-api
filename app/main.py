@@ -25,9 +25,14 @@ app = FastAPI(
 # Configuration CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # À restreindre en production
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server
+        "http://127.0.0.1:5173",  # Alternative localhost
+        "https://docs.getgrist.com",  # Grist officiel
+        "*"  # Temporaire pour développement - à restreindre en production
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -402,10 +407,27 @@ if __name__ == "__main__":
     
     port = int(os.getenv("PORT", 8000))  # Port depuis .env ou 8000 par défaut
     
-    uvicorn.run(
-        "app.main:app", 
-        host="0.0.0.0", 
-        port=port, 
-        reload=True,
-        log_level="info"
-    ) 
+    # Mode développement vs production
+    is_dev = os.getenv("ENV", "development") == "development"
+    
+    uvicorn_config = {
+        "host": "0.0.0.0",
+        "port": port,
+        "log_level": "info"
+    }
+    
+    # Configuration spécifique au développement
+    if is_dev:
+        uvicorn_config.update({
+            "reload": True,
+            "reload_excludes": [
+                "*.log",
+                "*.pid", 
+                "__pycache__",
+                "*.pyc",
+                ".git",
+                "node_modules"
+            ]
+        })
+    
+    uvicorn.run("app.main:app", **uvicorn_config) 

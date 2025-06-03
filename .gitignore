@@ -138,3 +138,4 @@ dmypy.json
 .DS_Store
 Thumbs.db 
 curl_test.sh
+api.pid
