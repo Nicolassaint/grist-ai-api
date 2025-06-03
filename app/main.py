@@ -1,6 +1,12 @@
+import warnings
+# Suppression des warnings Pydantic V2 et autres warnings de compatibilité
+warnings.filterwarnings("ignore", message="Valid config keys have changed in V2")
+warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
+from contextlib import asynccontextmanager
 from typing import List, Dict, Any
 import uuid
 import json
@@ -13,13 +19,33 @@ from .utils.logging import AgentLogger
 # Chargement des variables d'environnement
 load_dotenv()
 
-# Initialisation de l'application FastAPI
+# Initialisation de l'orchestrateur et logger globaux
+orchestrator = None
+logger = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Gestionnaire du cycle de vie de l'application"""
+    global orchestrator, logger
+    
+    # Démarrage
+    orchestrator = AIOrchestrator()
+    logger = AgentLogger("main_api")
+    logger.info("Démarrage de l'API Widget IA Grist")
+    
+    yield
+    
+    # Arrêt
+    logger.info("Arrêt de l'API Widget IA Grist")
+
+# Initialisation de l'application FastAPI avec lifespan
 app = FastAPI(
     title="API Widget IA Grist",
     description="Backend FastAPI pour un widget IA intégré à Grist, capable de traiter des requêtes en langage naturel via des agents IA spécialisés.",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # Configuration CORS
@@ -35,22 +61,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
-
-# Initialisation de l'orchestrateur
-orchestrator = AIOrchestrator()
-logger = AgentLogger("main_api")
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Événement de démarrage de l'application"""
-    logger.info("Démarrage de l'API Widget IA Grist")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Événement d'arrêt de l'application"""
-    logger.info("Arrêt de l'API Widget IA Grist")
 
 
 @app.get("/")
