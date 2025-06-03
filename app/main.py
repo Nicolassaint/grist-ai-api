@@ -1,7 +1,9 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from typing import List, Dict, Any
 import uuid
+import json
 from dotenv import load_dotenv
 
 from .models.request import GristRequest, ProcessedRequest, ChatResponse
@@ -62,13 +64,45 @@ async def root():
     }
 
 
+# Gestionnaire d'erreur pour les erreurs de validation
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Gestionnaire personnalisé pour les erreurs de validation"""
+    request_id = str(uuid.uuid4())
+    
+    # Log des détails de l'erreur de validation
+    logger.error(
+        "Erreur de validation de requête",
+        request_id=request_id,
+        method=request.method,
+        url=str(request.url),
+        validation_errors=exc.errors(),
+        raw_body=await get_raw_body(request)
+    )
+    
+    return {
+        "detail": "Erreur de validation des données",
+        "errors": exc.errors(),
+        "request_id": request_id
+    }
+
+
+async def get_raw_body(request: Request) -> str:
+    """Récupère le corps brut de la requête pour debug"""
+    try:
+        body = await request.body()
+        return body.decode('utf-8') if body else "Corps vide"
+    except Exception as e:
+        return f"Erreur lecture corps: {str(e)}"
+
+
 @app.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(request_data: List[GristRequest]):
+async def chat_endpoint(request: Request):
     """
     Endpoint principal pour traiter les requêtes conversationnelles
     
     Args:
-        request_data: Liste de requêtes Grist (généralement une seule)
+        request: Requête HTTP brute pour debug
         
     Returns:
         ChatResponse: Réponse structurée avec le résultat du traitement
@@ -76,21 +110,88 @@ async def chat_endpoint(request_data: List[GristRequest]):
     request_id = str(uuid.uuid4())
     
     try:
-        # Validation de la requête
-        if not request_data or len(request_data) == 0:
+        # Lecture du corps brut pour debug
+        raw_body = await request.body()
+        logger.info(
+            "Requête /chat - Corps brut reçu",
+            request_id=request_id,
+            raw_body_length=len(raw_body),
+            raw_body_complete=raw_body.decode('utf-8')  # Affichage complet pour debug
+        )
+        
+        # Parsing JSON manuel pour debug
+        try:
+            json_data = json.loads(raw_body.decode('utf-8'))
+            logger.info(
+                "Parsing JSON réussi",
+                request_id=request_id,
+                json_type=type(json_data).__name__,
+                json_keys=list(json_data.keys()) if isinstance(json_data, dict) else "N/A",
+                json_length=len(json_data) if isinstance(json_data, (list, dict)) else "N/A"
+            )
+        except json.JSONDecodeError as e:
+            logger.error(
+                "Erreur parsing JSON",
+                request_id=request_id,
+                json_error=str(e)
+            )
             raise HTTPException(
-                status_code=400, 
-                detail="Liste de requêtes vide"
+                status_code=400,
+                detail=f"JSON invalide: {str(e)}"
             )
         
-        # On traite la première requête (format attendu selon specs)
-        grist_request = request_data[0]
+        # Construction de la requête Grist à partir des éléments HTTP
+        try:
+            # Récupération des headers HTTP
+            headers_dict = dict(request.headers)
+            
+            # Récupération des paramètres de query
+            query_params = dict(request.query_params)
+            
+            # Le JSON reçu est traité comme le body
+            grist_request_data = {
+                "headers": headers_dict,
+                "params": {},  # Pas de params dans le path pour ce endpoint
+                "query": query_params,
+                "body": json_data  # Le JSON reçu devient le body
+            }
+            
+            # Validation Pydantic avec la structure complète
+            grist_request = GristRequest(**grist_request_data)
+                
+            logger.info(
+                "Construction requête Grist réussie",
+                request_id=request_id,
+                headers_count=len(headers_dict),
+                query_params_count=len(query_params),
+                body_keys=list(json_data.keys()) if isinstance(json_data, dict) else "N/A"
+            )
+            
+        except Exception as e:
+            logger.error(
+                "Erreur construction requête Grist",
+                request_id=request_id,
+                construction_error=str(e),
+                json_data_keys=list(json_data.keys()) if isinstance(json_data, dict) else "N/A"
+            )
+            raise HTTPException(
+                status_code=422,
+                detail=f"Erreur construction requête: {str(e)}"
+            )
+        
+        # Validation de la requête
+        if not grist_request:
+            raise HTTPException(
+                status_code=400, 
+                detail="Requête Grist invalide"
+            )
         
         logger.info(
-            "Nouvelle requête /chat",
+            "Nouvelle requête /chat validée",
             request_id=request_id,
             document_id=grist_request.body.documentId,
-            execution_mode=grist_request.body.executionMode
+            execution_mode=grist_request.body.executionMode,
+            nb_messages=len(grist_request.body.messages)
         )
         
         # Extraction de la clé API Grist depuis le header x-api-key
