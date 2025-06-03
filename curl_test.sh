@@ -41,11 +41,11 @@ curl -X POST http://localhost:8502/chat \
         "id": "8f67159d-8ab6-4837-8f91-22bfa5936e10",
         "createdAt": "2025-06-03T10:37:47.142Z",
         "role": "user",
-        "content": "Bonjour",
+        "content": "Donne moi la moyenne de l âge des personnes de ce document",
         "parts": [
           {
             "type": "text",
-            "text": "Bonjour"
+            "text": "Donne moi la moyenne de l âge des personnes de ce document"
           }
         ]
       }

@@ -77,6 +77,31 @@ class GristSQLRunner:
                         "row_count": len(data.get("records", []))
                     }
                     
+                    # Logs détaillés des résultats SQL
+                    self.logger.info(
+                        "📊 Données SQL brutes reçues",
+                        request_id=request_id,
+                        raw_data_keys=list(data.keys()),
+                        raw_data_size=len(str(data)),
+                        records_count=len(data.get("records", [])),
+                        columns_list=data.get("columns", [])
+                    )
+                    
+                    if result["data"]:
+                        self.logger.info(
+                            "📋 Contenu des résultats SQL",
+                            request_id=request_id,
+                            sample_records=result["data"][:3] if len(result["data"]) > 3 else result["data"],
+                            total_records=result["row_count"],
+                            columns=result["columns"]
+                        )
+                    else:
+                        self.logger.warning(
+                            "⚠️ Aucune donnée dans les résultats SQL",
+                            request_id=request_id,
+                            sql_query=sql_query
+                        )
+                    
                     self.logger.info(
                         "Requête SQL exécutée avec succès",
                         request_id=request_id,

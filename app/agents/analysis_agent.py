@@ -14,40 +14,20 @@ class AnalysisAgent:
         self.model = model
         self.logger = AgentLogger("analysis_agent")
         
-        self.analysis_prompt_template = """Tu es un expert en analyse de données travaillant avec Grist.
+        self.analysis_prompt_template = """Tu es un assistant d'analyse de données. Donne une interprétation COURTE et DIRECTE des résultats.
 
-Ta mission est d'analyser les données fournies et de produire des insights pertinents et actionnables.
+QUESTION: {user_question}
 
-QUESTION UTILISATEUR: {user_question}
-
-REQUÊTE SQL EXÉCUTÉE:
-```sql
-{sql_query}
-```
-
-RÉSULTATS DE LA REQUÊTE:
+RÉSULTATS SQL:
 {sql_results}
 
-RÉSUMÉ NUMÉRIQUE:
-{numeric_summary}
+INSTRUCTION: 
+Donne une réponse de 1-2 phrases maximum qui explique ce que montrent ces données de manière simple et utile.
+Ne fais pas de sections, pas de recommandations complexes, juste l'essentiel.
 
-CONTEXTE CONVERSATIONNEL:
-{conversation_context}
-
-INSTRUCTIONS POUR L'ANALYSE:
-1. Résume clairement ce que montrent les données
-2. Identifie les tendances, patterns ou anomalies importantes
-3. Propose des insights actionnables basés sur ces données
-4. Si les données sont insuffisantes, explique les limitations et suggère des analyses complémentaires
-5. Utilise un langage accessible et évite le jargon technique excessif
-6. Structure ta réponse avec des sections claires (Résumé, Insights, Recommandations)
-
-LIMITATIONS:
-- Ne fais jamais d'affirmations sur des données que tu ne vois pas
-- Si les résultats sont vides ou insuffisants, redirige vers des questions plus spécifiques
-- Reste factuel et base-toi uniquement sur les données fournies
-
-Ta réponse doit être structurée et utile pour la prise de décision."""
+Exemple de format attendu:
+"La moyenne d'âge est de 35 ans, ce qui indique une population majoritairement adulte en milieu de carrière."
+"""
     
     async def process_message(self, user_message: str, conversation_history: ConversationHistory,
                             sql_query: str, sql_results: Dict[str, Any], request_id: str) -> str:
@@ -106,25 +86,18 @@ Ta réponse doit être structurée et utile pour la prise de décision."""
                                request_id: str) -> str:
         """Génère l'analyse via l'IA"""
         
-        # Contexte conversationnel
-        recent_messages = conversation_history.get_recent_messages(3)
-        context = "\n".join([f"{msg.role}: {msg.content[:100]}" for msg in recent_messages[:-1]])
-        
-        # Construction du prompt d'analyse
+        # Construction du prompt simplifié
         prompt = self.analysis_prompt_template.format(
             user_question=user_message,
-            sql_query=sql_query,
-            sql_results=formatted_results,
-            numeric_summary=numeric_summary,
-            conversation_context=context if context else "Aucun contexte précédent"
+            sql_results=formatted_results
         )
         
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=800,
-                temperature=0.3  # Créativité modérée pour l'analyse
+                max_tokens=100,  # Limité pour forcer la concision
+                temperature=0.1  # Très peu de créativité, plus factuel
             )
             
             analysis = response.choices[0].message.content.strip()
@@ -278,16 +251,6 @@ Ta réponse doit être structurée et utile pour la prise de décision."""
         row_count = len(sql_results.get("data", [])) if sql_results else 0
         
         if row_count == 0:
-            return self._handle_no_data_scenario(user_message, sql_results)
+            return "Aucune donnée trouvée pour cette requête."
         
-        return (
-            f"## Analyse des données récupérées\n\n"
-            f"J'ai récupéré {row_count} ligne{'s' if row_count > 1 else ''} de données.\n\n"
-            f"Malheureusement, je rencontre une difficulté technique pour générer "
-            f"une analyse détaillée en ce moment.\n\n"
-            f"**Ce que je peux vous dire :**\n"
-            f"• {row_count} enregistrement{'s' if row_count > 1 else ''} correspond{'ent' if row_count > 1 else ''} à votre recherche\n"
-            f"• Les données sont disponibles et accessibles\n\n"
-            f"Pouvez-vous reformuler votre question d'analyse ou être plus spécifique "
-            f"sur ce que vous souhaitez analyser dans ces données ?"
-        ) 
+        return f"J'ai trouvé {row_count} résultat{'s' if row_count > 1 else ''} mais je ne peux pas les analyser pour le moment." 

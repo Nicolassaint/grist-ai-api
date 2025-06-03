@@ -206,6 +206,32 @@ async def chat_endpoint(request: Request):
         # Traitement par l'orchestrateur
         response = await orchestrator.process_chat_request(processed_request)
         
+        # Logs détaillés du résultat final
+        logger.info(
+            "🔍 Résultat final du traitement",
+            request_id=request_id,
+            agent_used=response.agent_used,
+            response_length=len(response.response),
+            response_preview=response.response[:200] + "..." if len(response.response) > 200 else response.response,
+            sql_query=response.sql_query,
+            data_analyzed=response.data_analyzed,
+            has_error=response.error is not None
+        )
+        
+        if response.sql_query:
+            logger.info(
+                "📊 Requête SQL générée",
+                request_id=request_id,
+                sql_query=response.sql_query
+            )
+        
+        if response.error:
+            logger.warning(
+                "⚠️ Erreur dans la réponse",
+                request_id=request_id,
+                error=response.error
+            )
+        
         logger.info(
             "Requête /chat traitée avec succès",
             request_id=request_id,

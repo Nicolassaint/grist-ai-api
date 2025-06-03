@@ -30,6 +30,17 @@ class GristSchemaFetcher:
                 if response.status_code == 200:
                     data = response.json()
                     tables = [table["id"] for table in data.get("tables", [])]
+                    
+                    # Logs détaillés des données reçues
+                    self.logger.info(
+                        "📋 Tables récupérées depuis Grist",
+                        request_id=request_id,
+                        document_id=document_id,
+                        tables_count=len(tables),
+                        tables_list=tables,
+                        raw_data_size=len(str(data))
+                    )
+                    
                     self.logger.info(f"Tables récupérées: {tables}", request_id=request_id)
                     return tables
                 else:
@@ -56,6 +67,16 @@ class GristSchemaFetcher:
                 if response.status_code == 200:
                     data = response.json()
                     
+                    # Log détaillé des données brutes reçues
+                    self.logger.info(
+                        "📊 Données schéma brutes reçues",
+                        request_id=request_id,
+                        table_id=table_id,
+                        raw_columns_count=len(data.get("columns", [])),
+                        raw_data_keys=list(data.keys()),
+                        raw_data_size=len(str(data))
+                    )
+                    
                     # Structuration du schéma
                     schema = {
                         "table_id": table_id,
@@ -71,6 +92,20 @@ class GristSchemaFetcher:
                             "description": col.get("description", "")
                         }
                         schema["columns"].append(column_info)
+                    
+                    # Log détaillé du schéma structuré
+                    self.logger.info(
+                        "🏗️ Schéma structuré créé",
+                        request_id=request_id,
+                        table_id=table_id,
+                        structured_columns=[{
+                            "id": col["id"], 
+                            "label": col["label"], 
+                            "type": col["type"]
+                        } for col in schema["columns"]],
+                        columns_with_formulas=len([col for col in schema["columns"] if col["formula"]]),
+                        columns_with_descriptions=len([col for col in schema["columns"] if col["description"]])
+                    )
                     
                     self.logger.info(
                         f"Schéma de table récupéré: {table_id}",
@@ -108,6 +143,22 @@ class GristSchemaFetcher:
             schema = await self.get_table_schema(document_id, table_id, request_id)
             if schema["columns"]:  # Seulement si le schéma n'est pas vide
                 schemas[table_id] = schema
+        
+        # Log détaillé des schémas finaux
+        self.logger.info(
+            "📚 Tous les schémas assemblés",
+            request_id=request_id,
+            document_id=document_id,
+            tables_count=len(schemas),
+            total_columns=sum(len(schema["columns"]) for schema in schemas.values()),
+            schemas_summary={
+                table_id: {
+                    "columns_count": len(schema["columns"]),
+                    "column_types": list(set(col["type"] for col in schema["columns"]))
+                }
+                for table_id, schema in schemas.items()
+            }
+        )
         
         self.logger.info(
             f"Tous les schémas récupérés",

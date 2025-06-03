@@ -107,6 +107,25 @@ class AIOrchestrator:
                 request_id
             )
             
+            # Logs détaillés du résultat de l'orchestrateur
+            self.logger.info(
+                "🎯 Traitement orchestrateur terminé",
+                request_id=request_id,
+                selected_agent=selected_agent.value,
+                final_agent_used=response_data.agent_used,
+                response_length=len(response_data.response),
+                has_sql_query=response_data.sql_query is not None,
+                data_analyzed=response_data.data_analyzed,
+                has_error=response_data.error is not None
+            )
+            
+            if response_data.sql_query:
+                self.logger.info(
+                    "📋 Requête SQL dans la réponse",
+                    request_id=request_id,
+                    sql_query=response_data.sql_query
+                )
+            
             return response_data
             
         except Exception as e:
@@ -151,6 +170,14 @@ class AIOrchestrator:
             user_message, conversation_history, request_id
         )
         
+        # Log du résultat de l'agent générique
+        self.logger.info(
+            "💬 Résultat agent générique",
+            request_id=request_id,
+            response_length=len(response_text),
+            response_preview=response_text[:150] + "..." if len(response_text) > 150 else response_text
+        )
+        
         return ChatResponse(
             response=response_text,
             agent_used=AgentType.GENERIC.value
@@ -158,11 +185,16 @@ class AIOrchestrator:
     
     async def _process_sql(self, user_message: str, conversation_history: ConversationHistory,
                          processed_request: ProcessedRequest, request_id: str) -> ChatResponse:
-        """Traite avec l'agent SQL"""
+        """Traite avec l'agent SQL puis analyse automatiquement"""
         
         # Initialisation des composants Grist pour cette requête
         grist_key = processed_request.grist_api_key or self.default_grist_key
         if not grist_key:
+            self.logger.warning(
+                "⚠️ Clé API Grist manquante",
+                request_id=request_id,
+                document_id=processed_request.document_id
+            )
             return ChatResponse(
                 response="Configuration manquante : clé API Grist non fournie.",
                 agent_used=AgentType.SQL.value,
@@ -173,28 +205,70 @@ class AIOrchestrator:
         sql_runner = GristSQLRunner(grist_key)
         sql_agent = SQLAgent(self.openai_client, schema_fetcher, sql_runner, self.analysis_model)
         
+        self.logger.info(
+            "🔧 Composants Grist initialisés",
+            request_id=request_id,
+            document_id=processed_request.document_id,
+            has_grist_key=bool(grist_key)
+        )
+        
         # Traitement SQL
         response_text, sql_query, sql_results = await sql_agent.process_message(
             user_message, conversation_history, processed_request.document_id, request_id
         )
         
-        # Vérifier si on doit passer à l'analyse
-        should_analyze = self._should_auto_analyze(user_message, sql_results)
+        # Logs détaillés des résultats SQL
+        self.logger.info(
+            "🗄️ Résultat agent SQL",
+            request_id=request_id,
+            response_length=len(response_text),
+            sql_query_length=len(sql_query) if sql_query else 0,
+            sql_success=sql_results.get("success", False) if sql_results else False,
+            sql_row_count=sql_results.get("row_count", 0) if sql_results else 0
+        )
         
-        if should_analyze and sql_results and sql_results.get("success"):
-            # Enrichissement avec analyse automatique
+        if sql_results:
+            self.logger.info(
+                "📊 Détails résultats SQL",
+                request_id=request_id,
+                sql_results_keys=list(sql_results.keys()),
+                sql_data_preview=str(sql_results.get("data", []))[:200] + "..." if sql_results.get("data") and len(str(sql_results.get("data", []))) > 200 else str(sql_results.get("data", [])),
+                sql_error=sql_results.get("error")
+            )
+        
+        # TOUJOURS analyser après une requête SQL réussie
+        if sql_results and sql_results.get("success"):
+            self.logger.info(
+                "🔬 Analyse automatique systématique",
+                request_id=request_id,
+                sql_success=True
+            )
+            
             analysis_text = await self.analysis_agent.process_message(
                 user_message, conversation_history, sql_query, sql_results, request_id
             )
             
-            # Combinaison des réponses
-            combined_response = f"{response_text}\n\n---\n\n## Analyse des résultats\n\n{analysis_text}"
+            self.logger.info(
+                "📈 Résultat analyse automatique",
+                request_id=request_id,
+                analysis_length=len(analysis_text),
+                analysis_preview=analysis_text[:150] + "..." if len(analysis_text) > 150 else analysis_text
+            )
             
+            # Retourner UNIQUEMENT l'analyse (pas de concaténation)
             return ChatResponse(
-                response=combined_response,
-                agent_used=f"{AgentType.SQL.value}+{AgentType.ANALYSIS.value}",
+                response=analysis_text,
+                agent_used=AgentType.ANALYSIS.value,
                 sql_query=sql_query,
                 data_analyzed=True
+            )
+        else:
+            # Si échec SQL, pas d'analyse possible
+            self.logger.warning(
+                "⚠️ Pas d'analyse car échec SQL",
+                request_id=request_id,
+                sql_success=False,
+                sql_error=sql_results.get("error") if sql_results else "Aucun résultat"
             )
         
         return ChatResponse(
@@ -213,31 +287,6 @@ class AIOrchestrator:
         
         # Pour simplifier, on redirige vers SQL + analyse
         return await self._process_sql(user_message, conversation_history, processed_request, request_id)
-    
-    def _should_auto_analyze(self, user_message: str, sql_results: Optional[Dict[str, Any]]) -> bool:
-        """Détermine si on doit automatiquement analyser les résultats SQL"""
-        
-        if not sql_results or not sql_results.get("success"):
-            return False
-        
-        # Mots-clés indiquant une demande d'analyse
-        analysis_keywords = [
-            "analyse", "tendance", "insight", "que penses-tu", "interprétation",
-            "résumé", "conclusion", "recommandation", "pattern", "évolution"
-        ]
-        
-        message_lower = user_message.lower()
-        has_analysis_request = any(keyword in message_lower for keyword in analysis_keywords)
-        
-        # Analyse automatique si:
-        # 1. Demande explicite d'analyse
-        # 2. Résultats avec plus de 5 lignes (données substantielles)
-        # 3. Colonnes numériques détectées
-        
-        row_count = sql_results.get("row_count", 0)
-        has_substantial_data = row_count >= 5
-        
-        return has_analysis_request or has_substantial_data
     
     def get_stats(self) -> Dict[str, Any]:
         """Retourne les statistiques d'utilisation"""
