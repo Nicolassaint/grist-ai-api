@@ -5,10 +5,16 @@ Script de test simple pour l'API Widget IA Grist
 
 import requests
 import json
+import os
 from typing import Dict, Any
+from dotenv import load_dotenv
+
+# Chargement des variables d'environnement
+load_dotenv()
 
 # Configuration
-API_BASE_URL = "http://localhost:8000"
+PORT = os.getenv("PORT", "8000")
+API_BASE_URL = f"http://localhost:{PORT}"
 
 def test_root_endpoint():
     """Test de l'endpoint racine"""

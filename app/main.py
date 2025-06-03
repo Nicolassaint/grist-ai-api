@@ -398,10 +398,14 @@ async def log_requests(request: Request, call_next):
 
 if __name__ == "__main__":
     import uvicorn
+    import os
+    
+    port = int(os.getenv("PORT", 8000))  # Port depuis .env ou 8000 par défaut
+    
     uvicorn.run(
         "app.main:app", 
         host="0.0.0.0", 
-        port=8502, 
+        port=port, 
         reload=True,
         log_level="info"
     ) 

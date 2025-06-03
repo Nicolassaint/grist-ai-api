@@ -8,10 +8,21 @@ Créer une API Python 3.10 FastAPI agissant comme backend d'un widget IA dans l'
 
 ## 🧠 Agents IA
 
-- **Agent Principal** (générique) : Questions générales et petit talk
-- **Agent de Routing** : Dirige les messages vers l'agent approprié
-- **Agent SQL** : Génère des requêtes SQL à partir de langage naturel
-- **Agent d'Analyse** : Analyse les données et fournit des insights
+- **Agent de Routing** : Dirige les messages vers l'agent approprié selon le contexte
+- **Agent Générique** : Traite les questions générales et le petit talk
+- **Agent SQL** : Génère et exécute des requêtes SQL à partir du langage naturel
+- **Agent d'Analyse** : Fournit automatiquement une interprétation courte et claire des résultats SQL
+
+### 🔄 Workflow Simplifié
+
+Pour les requêtes de données :
+1. **Router** détecte une demande de données → **SQL Agent**
+2. **SQL Agent** exécute la requête → **Analysis Agent** (automatique)
+3. **Analysis Agent** retourne une réponse concise (1-2 phrases)
+
+**Exemple :**
+- Question : "Quel est l'âge moyen des candidats ?"
+- Réponse : "La moyenne d'âge est de 35 ans, ce qui indique une population majoritairement adulte en milieu de carrière."
 
 ## 🚀 Installation
 
@@ -106,9 +117,9 @@ Endpoint principal pour traiter les requêtes conversationnelles.
 **Response:**
 ```json
 {
-  "response": "Voici les résultats...",
-  "agent_used": "sql",
-  "sql_query": "SELECT ...",
+  "response": "La moyenne d'âge est de 35 ans, ce qui indique une population majoritairement adulte en milieu de carrière.",
+  "agent_used": "analysis",
+  "sql_query": "SELECT AVG(CAST(age AS INTEGER)) AS moyenne_age FROM Data;",
   "data_analyzed": true,
   "error": null
 }
@@ -212,9 +223,10 @@ Une clé par défaut peut être configurée via `GRIST_API_KEY` pour les tests l
 - [x] Orchestration intelligente via routeur
 - [x] Agent générique pour petit talk
 - [x] Agent SQL avec génération et validation sécurisée
-- [x] Agent d'analyse avec insights automatiques
+- [x] Agent d'analyse systématique avec réponses concises (1-2 phrases)
+- [x] Workflow automatique SQL → Analysis pour toutes les requêtes de données
 - [x] Intégration complète API Grist (schémas + SQL)
-- [x] Logging structuré par agent
+- [x] Logging structuré et détaillé par agent
 - [x] Gestion d'erreurs robuste
 - [x] Documentation API automatique
 - [x] Support Docker
@@ -250,26 +262,30 @@ Pour activer les logs de debug : `LOG_LEVEL=DEBUG`
 
 ## 📚 Exemples d'utilisation
 
-### Questions générales
+### Questions générales (Agent Générique)
 ```
 "Bonjour, comment ça va ?"
 "Aide-moi à comprendre ce widget"
 "Quelles sont tes capacités ?"
 ```
+**Réponse typique :** Conversation naturelle et aide contextuelle.
 
-### Requêtes de données
+### Requêtes de données (SQL → Analysis automatique)
 ```
 "Montre-moi les ventes du mois dernier"
 "Combien d'utilisateurs avons-nous ?"
+"Quel est l'âge moyen des candidats ?"
 "Liste les 10 dernières commandes"
 ```
+**Réponse typique :** Analyse concise en 1-2 phrases expliquant les résultats.
 
-### Analyses
+### Analyses complexes (SQL → Analysis automatique)
 ```
-"Analyse les tendances de ventes"
-"Que penses-tu de ces résultats ?"
-"Quels sont les insights sur nos données ?"
+"Analyse les tendances de ventes par région"
+"Compare les performances entre départements"
+"Quelle est la répartition des âges ?"
 ```
+**Réponse typique :** Insight direct sur les patterns et tendances détectés.
 
 ## 🤝 Contribution
 
