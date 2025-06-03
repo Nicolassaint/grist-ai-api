@@ -1,0 +1,58 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+docs/
+
+# Virtual environment
+venv/
+env/
+.env.local
+.env.development
+.env.staging
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testing
+test_*.py
+tests/
+.tox/
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Node modules (si jamais)
+node_modules/
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml 
