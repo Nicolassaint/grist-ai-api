@@ -84,7 +84,7 @@ Explication : Cette requête récupère..."""
             
             execution_time = time.time() - start_time
             self.logger.log_agent_response(request_id, response_text, execution_time)
-            self.logger.log_sql_generation(request_id, sql_query, schemas)
+            self.logger.log_sql_generation(sql_query, len(schemas))
             
             return response_text, sql_query, sql_results
             
@@ -181,7 +181,12 @@ Explication : Cette requête récupère..."""
         
         if row_count == 0:
             return (f"J'ai exécuté cette requête :\n\n```sql\n{sql_query}\n```\n\n"
-                   f"Aucun résultat trouvé. Les données ne correspondent peut-être pas aux critères de votre recherche.")
+                   f"**Résultat :** Aucune donnée ne correspond aux critères de votre recherche.\n\n"
+                   f"💡 **Suggestions :**\n"
+                   f"• Vérifiez si les données existent dans vos tables\n"
+                   f"• Essayez d'élargir vos critères de recherche\n"
+                   f"• Reformulez votre question avec des termes différents\n\n"
+                   f"*Cette absence de résultats peut être normale selon vos données.*")
         
         # Formatage des résultats
         formatted_results = self.sql_runner.format_results_for_analysis(sql_results)

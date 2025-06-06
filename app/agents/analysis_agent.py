@@ -49,19 +49,19 @@ Exemple de format attendu:
         self.logger.log_agent_start(request_id, user_message)
         
         try:
-            # Vérification des données
-            if not sql_results or not sql_results.get("success"):
-                return self._handle_no_data_scenario(user_message, sql_results)
-            
-            # Préparation des données pour l'analyse
+            # Formatage des données pour l'analyse
             formatted_results = self._format_data_for_analysis(sql_results)
             numeric_summary = self._generate_numeric_summary(sql_results)
             
-            # Si pas de données significatives, redirection
-            if not sql_results.get("data") or len(sql_results["data"]) == 0:
-                return self._suggest_alternative_analysis(user_message)
+            # Gestion intelligente des données vides vs erreurs
+            if not sql_results.get("success"):
+                # Vraie erreur SQL
+                return self._handle_sql_error(user_message, sql_results)
+            elif not sql_results.get("data") or len(sql_results["data"]) == 0:
+                # Requête réussie mais sans données - cas normal
+                return self._handle_empty_results(user_message, sql_query)
             
-            # Génération de l'analyse via IA
+            # Génération de l'analyse via IA avec des données disponibles
             analysis_response = await self._generate_analysis(
                 user_message, conversation_history, sql_query, 
                 formatted_results, numeric_summary, request_id
@@ -222,6 +222,55 @@ Exemple de format attendu:
             "**Exemple :** Au lieu de 'Analyse les ventes de janvier 2025', "
             "essayez 'Montre-moi toutes les ventes' d'abord."
         ])
+        
+        return "\n".join(response_parts)
+    
+    def _handle_sql_error(self, user_message: str, sql_results: Dict[str, Any]) -> str:
+        """Gère les vraies erreurs SQL (échec de requête)"""
+        
+        error_msg = sql_results.get("error", "Erreur SQL inconnue")
+        
+        response_parts = [
+            "## ❌ Erreur d'exécution SQL",
+            "",
+            "La requête SQL a échoué et ne peut pas être analysée.",
+            "",
+            f"**Erreur technique :** {error_msg}",
+            "",
+            "### Suggestions pour résoudre :",
+            "• Vérifiez vos permissions d'accès aux données",
+            "• Reformulez votre question avec des termes plus simples",
+            "• Assurez-vous que les tables et colonnes existent",
+            "• Contactez l'administrateur si l'erreur persiste"
+        ]
+        
+        return "\n".join(response_parts)
+    
+    def _handle_empty_results(self, user_message: str, sql_query: str) -> str:
+        """Gère les résultats vides (requête réussie mais aucune donnée)"""
+        
+        response_parts = [
+            "## 📊 Analyse des résultats",
+            "",
+            "La requête s'est exécutée avec succès mais n'a retourné aucune donnée.",
+            "",
+            "### 🔍 Que signifie ce résultat ?",
+            "",
+            "**C'est normal !** Cela peut signifier que :",
+            "• Aucune donnée ne correspond à vos critères de recherche",
+            "• Les filtres appliqués sont trop restrictifs",
+            "• Les données recherchées n'existent pas encore dans votre base",
+            "",
+            "### 💡 Suggestions pour approfondir :",
+            "• **Élargir la recherche :** Essayez avec des critères moins restrictifs",
+            "• **Vérifier les données :** Demandez un aperçu général de vos tables",
+            "• **Reformuler :** Posez la question différemment",
+            "",
+            "**Exemples de questions plus larges :**",
+            "• 'Montre-moi un aperçu de toutes les données'",
+            "• 'Quelles sont les données disponibles dans cette table ?'",
+            "• 'Combien de lignes contient cette table ?'"
+        ]
         
         return "\n".join(response_parts)
     

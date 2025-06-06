@@ -236,32 +236,54 @@ class AIOrchestrator:
                 sql_error=sql_results.get("error")
             )
         
-        # TOUJOURS analyser après une requête SQL réussie
+        # ANALYSE INTELLIGENTE après une requête SQL réussie
         if sql_results and sql_results.get("success"):
-            self.logger.info(
-                "🔬 Analyse automatique systématique",
-                request_id=request_id,
-                sql_success=True
-            )
+            # Vérifier s'il y a des données à analyser
+            has_data = sql_results.get("data") and len(sql_results.get("data", [])) > 0
             
-            analysis_text = await self.analysis_agent.process_message(
-                user_message, conversation_history, sql_query, sql_results, request_id
-            )
-            
-            self.logger.info(
-                "📈 Résultat analyse automatique",
-                request_id=request_id,
-                analysis_length=len(analysis_text),
-                analysis_preview=analysis_text[:150] + "..." if len(analysis_text) > 150 else analysis_text
-            )
-            
-            # Retourner UNIQUEMENT l'analyse (pas de concaténation)
-            return ChatResponse(
-                response=analysis_text,
-                agent_used=AgentType.ANALYSIS.value,
-                sql_query=sql_query,
-                data_analyzed=True
-            )
+            if has_data:
+                self.logger.info(
+                    "🔬 Analyse automatique avec données",
+                    request_id=request_id,
+                    sql_success=True,
+                    data_count=len(sql_results.get("data", []))
+                )
+                
+                analysis_text = await self.analysis_agent.process_message(
+                    user_message, conversation_history, sql_query, sql_results, request_id
+                )
+                
+                self.logger.info(
+                    "📈 Résultat analyse automatique",
+                    request_id=request_id,
+                    analysis_length=len(analysis_text),
+                    analysis_preview=analysis_text[:150] + "..." if len(analysis_text) > 150 else analysis_text
+                )
+                
+                # Retourner UNIQUEMENT l'analyse (pas de concaténation)
+                return ChatResponse(
+                    response=analysis_text,
+                    agent_used=AgentType.ANALYSIS.value,
+                    sql_query=sql_query,
+                    data_analyzed=True
+                )
+            else:
+                # Cas particulier : requête réussie mais aucun résultat
+                # Ce n'est PAS une erreur, juste une absence de données correspondantes
+                self.logger.info(
+                    "✅ Requête SQL réussie mais sans résultats",
+                    request_id=request_id,
+                    sql_success=True,
+                    data_count=0
+                )
+                
+                # Retourner directement la réponse SQL optimisée pour les résultats vides
+                return ChatResponse(
+                    response=response_text,
+                    agent_used=AgentType.SQL.value,
+                    sql_query=sql_query,
+                    data_analyzed=False
+                )
         else:
             # Si échec SQL, pas d'analyse possible
             self.logger.warning(

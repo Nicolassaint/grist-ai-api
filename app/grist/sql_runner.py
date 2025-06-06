@@ -65,7 +65,7 @@ class GristSQLRunner:
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url, headers=self.headers)
-                self.logger.log_grist_api_call(request_id, url, response.status_code)
+                self.logger.log_grist_api(url, response.status_code)
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -96,10 +96,11 @@ class GristSQLRunner:
                             columns=result["columns"]
                         )
                     else:
-                        self.logger.warning(
-                            "⚠️ Aucune donnée dans les résultats SQL",
+                        self.logger.info(
+                            "✅ Requête SQL réussie avec résultats vides",
                             request_id=request_id,
-                            sql_query=sql_query
+                            sql_query=sql_query,
+                            note="Aucune donnée correspondante trouvée - c'est un résultat normal"
                         )
                     
                     self.logger.info(
