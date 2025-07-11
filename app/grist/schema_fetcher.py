@@ -7,8 +7,11 @@ import os
 class GristSchemaFetcher:
     """Récupère et structure les schémas de colonnes depuis l'API Grist"""
     
-    def __init__(self, api_key: str, base_url: str = "https://docs.getgrist.com/api"):
+    def __init__(self, api_key: str, base_url: Optional[str] = None):
         self.api_key = api_key
+        # Utilise la variable d'environnement ou la valeur par défaut
+        if base_url is None:
+            base_url = os.getenv("GRIST_API_BASE_URL", "https://docs.getgrist.com/api")
         self.base_url = base_url.rstrip('/')
         self.logger = AgentLogger("grist_schema_fetcher")
         

@@ -60,6 +60,7 @@ OPENAI_API_KEY=sk-votre-clé-etalab
 OPENAI_API_BASE=https://albert.api.etalab.gouv.fr/v1
 OPENAI_MODEL=gpt-3.5-turbo
 OPENAI_ANALYSIS_MODEL=gpt-4
+GRIST_API_BASE_URL=https://docs.getgrist.com/api
 LOG_LEVEL=INFO
 ```
 
@@ -82,6 +83,7 @@ docker run -p 8000:8000 \
   -e OPENAI_API_BASE=https://albert.api.etalab.gouv.fr/v1 \
   -e OPENAI_MODEL=gpt-3.5-turbo \
   -e OPENAI_ANALYSIS_MODEL=gpt-4 \
+  -e GRIST_API_BASE_URL=https://docs.getgrist.com/api \
   grist-ai-widget
 ```
 
@@ -198,6 +200,7 @@ app/
 | `OPENAI_API_BASE` | URL de base de l'API | ✅ |
 | `OPENAI_MODEL` | Modèle par défaut (routing, generic) | ❌ |
 | `OPENAI_ANALYSIS_MODEL` | Modèle pour SQL et analyse | ❌ |
+| `GRIST_API_BASE_URL` | URL de base API Grist (par défaut: docs.getgrist.com/api) | ❌ |
 | `LOG_LEVEL` | Niveau de log (INFO, DEBUG, etc.) | ❌ |
 | `GRIST_API_KEY` | Clé API Grist (tests uniquement) | ❌ |
 
@@ -214,6 +217,21 @@ L'API reçoit la clé Grist dans le header `x-api-key` de chaque requête :
 ```
 
 Une clé par défaut peut être configurée via `GRIST_API_KEY` pour les tests locaux, mais en production la clé est toujours fournie par requête.
+
+#### Configuration de l'instance Grist
+
+Pour tester sur différentes instances de Grist, modifiez la variable `GRIST_API_BASE_URL` :
+
+```ini
+# Instance par défaut (SaaS)
+GRIST_API_BASE_URL=https://docs.getgrist.com/api
+
+# Instance gouvernementale française
+GRIST_API_BASE_URL=https://grist.numerique.gouv.fr/api
+
+# Instance locale ou custom
+GRIST_API_BASE_URL=https://votre-instance.exemple.com/api
+```
 
 ## 🚦 Fonctionnalités
 
