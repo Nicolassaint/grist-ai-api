@@ -12,6 +12,7 @@ class AgentType(str, Enum):
     GENERIC = "generic"
     SQL = "sql"
     ANALYSIS = "analysis"
+    STRUCTURE ="structure"
 
 
 class RouterAgent:
@@ -29,22 +30,24 @@ Ta mission est de déterminer quel agent doit traiter la requête utilisateur pa
 1. **GENERIC** : Questions générales, salutations, petit talk, demandes d'aide générale
 2. **SQL** : Demandes d'extraction de données, questions nécessitant une requête SQL
 3. **ANALYSIS** : Demandes d'analyse de données existantes, d'insights, de tendances
+4. **STRUCTURE** : Questions sur la structure des données (tables, colonnes, types, relations), la cohérence des données ou des conseils sur la façon de structurer les données
 
 Exemples :
-- "Bonjour, comment ça va ?" → GENERIC
-- "Peux-tu m'aider ?" → GENERIC  
-- "Montre-moi les ventes du mois dernier" → SQL
-- "Combien d'utilisateurs avons-nous ?" → SQL
-- "Analyse les tendances des ventes" → SQL (puis ANALYSIS)
-- "Que penses-tu de ces résultats ?" → ANALYSIS
+- "Bonjour, comment ça va ?" → GENERIC  
+- "Montre-moi les ventes du mois dernier" → SQL  
+- "Analyse les tendances des ventes" → SQL (puis ANALYSIS)  
+- "Comment organiser mes tables pour gérer des clients et des commandes ?" → STRUCTURE  
+- "Pourquoi ai-je des champs vides dans ma colonne 'email' ?" → STRUCTURE  
 
 Instructions importantes :
-- Si la question concerne des données spécifiques = SQL
-- Si la question demande une analyse sur des données déjà récupérées = ANALYSIS
-- Si c'est général/conversationnel = GENERIC
-- En cas de doute entre SQL et ANALYSIS, choisis SQL
+- Si la question concerne **des données spécifiques à extraire** = SQL  
+- Si la question demande une **analyse/interprétation** de résultats existants = ANALYSIS  
+- Si la question concerne la **structure, modélisation ou cohérence** des données = STRUCTURE  
+- Si c'est **général ou conversationnel** = GENERIC  
+- En cas de doute entre SQL et ANALYSIS, choisis SQL  
+- En cas de doute entre SQL et STRUCTURE, choisis SQL
 
-Réponds UNIQUEMENT par : GENERIC, SQL ou ANALYSIS"""
+Réponds UNIQUEMENT par : GENERIC, SQL, ANALYSIS ou STRUCTURE"""
     
     async def route_message(self, user_message: str, conversation_history: ConversationHistory, request_id: str) -> AgentType:
         """Détermine quel agent doit traiter le message"""
@@ -80,17 +83,14 @@ Réponds UNIQUEMENT par : GENERIC, SQL ou ANALYSIS"""
             agent_mapping = {
                 "GENERIC": AgentType.GENERIC,
                 "SQL": AgentType.SQL, 
-                "ANALYSIS": AgentType.ANALYSIS
+                "ANALYSIS": AgentType.ANALYSIS,
+                "STRUCTURE": AgentType.STRUCTURE
             }
             
             selected_agent = agent_mapping.get(routing_decision, AgentType.GENERIC)
             
             execution_time = time.time() - start_time
-            self.logger.log_agent_response(
-                request_id, 
-                f"Routé vers: {selected_agent}",
-                execution_time
-            )
+            self.logger.log_agent_response("router", True, execution_time)
             
             self.logger.info(
                 "Message routé avec succès",

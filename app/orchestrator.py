@@ -13,6 +13,7 @@ from .agents.router_agent import RouterAgent, AgentType
 from .agents.generic_agent import GenericAgent
 from .agents.sql_agent import SQLAgent
 from .agents.analysis_agent import AnalysisAgent
+from .agents.structure_agent import StructureAgent
 
 load_dotenv()
 
@@ -53,6 +54,7 @@ class AIOrchestrator:
         self.analysis_agent = AnalysisAgent(self.openai_client, self.analysis_model)
         
         # Note: Les composants Grist sont initialisés par requête car ils dépendent de la clé API
+        # L'agent structure sera initialisé par requête avec les composants Grist
         self.logger.info("Orchestrateur initialisé avec succès", 
                         default_model=self.default_model,
                         analysis_model=self.analysis_model)
@@ -157,6 +159,9 @@ class AIOrchestrator:
             # Pour l'analyse, on a besoin de données SQL existantes
             # Si pas de données dans l'historique, on redirige vers SQL d'abord
             return await self._process_analysis_or_redirect(user_message, conversation_history, processed_request, request_id)
+        
+        elif agent_type == AgentType.STRUCTURE:
+            return await self._process_structure(user_message, conversation_history, processed_request, request_id)
         
         else:
             # Fallback vers générique
@@ -298,6 +303,55 @@ class AIOrchestrator:
             agent_used=AgentType.SQL.value,
             sql_query=sql_query,
             data_analyzed=False
+        )
+    
+    async def _process_structure(self, user_message: str, conversation_history: ConversationHistory,
+                               processed_request: ProcessedRequest, request_id: str) -> ChatResponse:
+        """Traite avec l'agent structure pour analyser la structure des données"""
+        
+        # Initialisation des composants Grist pour cette requête
+        grist_key = processed_request.grist_api_key or self.default_grist_key
+        if not grist_key:
+            self.logger.warning(
+                "⚠️ Clé API Grist manquante pour l'agent structure",
+                request_id=request_id,
+                document_id=processed_request.document_id
+            )
+            return ChatResponse(
+                response="Configuration manquante : clé API Grist non fournie pour analyser la structure des données.",
+                agent_used=AgentType.STRUCTURE.value,
+                error="Missing Grist API key"
+            )
+        
+        from .grist.content_fetcher import GristContentFetcher
+        
+        schema_fetcher = GristSchemaFetcher(grist_key)
+        content_fetcher = GristContentFetcher(grist_key)
+        structure_agent = StructureAgent(self.openai_client, schema_fetcher, content_fetcher, analysis_model=self.analysis_model)
+        
+        self.logger.info(
+            "🏗️ Composants Grist initialisés pour l'agent structure",
+            request_id=request_id,
+            document_id=processed_request.document_id,
+            has_grist_key=bool(grist_key)
+        )
+        
+        # Traitement avec l'agent structure
+        response_text = await structure_agent.process_message(
+            user_message, conversation_history, processed_request.document_id, request_id
+        )
+        
+        # Logs détaillés des résultats
+        self.logger.info(
+            "🏗️ Résultat agent structure",
+            request_id=request_id,
+            response_length=len(response_text),
+            response_preview=response_text[:150] + "..." if len(response_text) > 150 else response_text
+        )
+        
+        return ChatResponse(
+            response=response_text,
+            agent_used=AgentType.STRUCTURE.value
         )
     
     async def _process_analysis_or_redirect(self, user_message: str, conversation_history: ConversationHistory,

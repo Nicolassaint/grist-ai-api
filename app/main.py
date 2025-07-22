@@ -16,6 +16,7 @@ from .models.request import GristRequest, ProcessedRequest, ChatResponse
 from .orchestrator import AIOrchestrator
 from .utils.logging import AgentLogger
 
+
 # Chargement des variables d'environnement
 load_dotenv()
 
@@ -256,7 +257,17 @@ async def list_agents():
                 "Optimisation du routage",
                 "Gestion du contexte conversationnel"
             ]
+        },
+        "struct": {
+            "name": "Agent Structure",
+            "description": "Répond aux questions liées à la structure, la modélisation et la cohérence des données dans Grist",
+            "capabilities": [
+                "Identification et explication des tables, colonnes, types de champs",
+                "Conseils sur la modélisation et l'organisation des données",
+                "Détection de problèmes de cohérence ou de qualité des données"
+                ]
         }
+
     }
     
     return {

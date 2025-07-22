@@ -21,33 +21,33 @@ class SQLAgent:
         
         self.sql_prompt_template = """Tu es un expert SQL spécialisé dans la génération de requêtes pour Grist.
 
-SCHÉMAS DISPONIBLES:
-{schemas}
+        SCHÉMAS DISPONIBLES:
+        {schemas}
 
-INSTRUCTIONS IMPORTANTES:
-1. Génère UNIQUEMENT des requêtes SELECT (pas de INSERT, UPDATE, DELETE, DROP)
-2. Utilise exactement les noms de tables et colonnes fournis dans les schémas
-3. Si plusieurs tables sont disponibles, utilise les JOINtures appropriées
-4. Optimise pour la performance (LIMIT quand approprié)
-5. Gère les types de données correctement (Text, Numeric, Date, etc.)
-6. Si la question est ambiguë, propose la requête la plus probable
+        INSTRUCTIONS IMPORTANTES:
+        1. Génère UNIQUEMENT des requêtes SELECT (pas de INSERT, UPDATE, DELETE, DROP)
+        2. Utilise exactement les noms de tables et colonnes fournis dans les schémas
+        3. Si plusieurs tables sont disponibles, utilise les JOINtures appropriées
+        4. Optimise pour la performance (LIMIT quand approprié)
+        5. Gère les types de données correctement (Text, Numeric, Date, etc.)
+        6. Si la question est ambiguë, propose la requête la plus probable
 
-QUESTION UTILISATEUR: {user_question}
+        QUESTION UTILISATEUR: {user_question}
 
-CONTEXTE CONVERSATIONNEL:
-{conversation_context}
+        CONTEXTE CONVERSATIONNEL:
+        {conversation_context}
 
-Réponds avec :
-1. La requête SQL (entre ```sql et ```)
-2. Une explication brève de ce que fait la requête
-3. Les limitations ou hypothèses éventuelles
+        Réponds avec :
+        1. La requête SQL (entre ```sql et ```)
+        2. Une explication brève de ce que fait la requête
+        3. Les limitations ou hypothèses éventuelles
 
-Format de réponse attendu :
-```sql
-SELECT ...
-```
+        Format de réponse attendu :
+        ```sql
+        SELECT ...
+        ```
 
-Explication : Cette requête récupère..."""
+        Explication : Cette requête récupère..."""
     
     async def process_message(self, user_message: str, conversation_history: ConversationHistory, 
                             document_id: str, request_id: str) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
