@@ -14,17 +14,17 @@ class GristSchemaFetcher:
             base_url = os.getenv("GRIST_API_BASE_URL", "https://docs.getgrist.com/api")
         self.base_url = base_url.rstrip('/')
         self.logger = AgentLogger("grist_schema_fetcher")
-        
-        # Headers par défaut
+
+        # Headers par défaut (pas d'Authorization, on utilise le query param auth=)
         self.headers = {
-            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
     
     async def get_document_tables(self, document_id: str, request_id: str = "unknown") -> List[str]:
         """Récupère la liste des tables d'un document"""
-        url = f"{self.base_url}/docs/{document_id}/tables"
-        
+        # Utilise le query parameter auth= pour les tokens de widget Grist
+        url = f"{self.base_url}/docs/{document_id}/tables?auth={self.api_key}"
+
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, headers=self.headers)
@@ -60,8 +60,9 @@ class GristSchemaFetcher:
     
     async def get_table_schema(self, document_id: str, table_id: str, request_id: str = "unknown") -> Dict[str, Any]:
         """Récupère le schéma d'une table spécifique"""
-        url = f"{self.base_url}/docs/{document_id}/tables/{table_id}/columns"
-        
+        # Utilise le query parameter auth= pour les tokens de widget Grist
+        url = f"{self.base_url}/docs/{document_id}/tables/{table_id}/columns?auth={self.api_key}"
+
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, headers=self.headers)

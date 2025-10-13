@@ -206,17 +206,19 @@ app/
 
 ### Intégration Grist
 
-L'API reçoit la clé Grist dans le header `x-api-key` de chaque requête :
+L'API reçoit un token d'accès Grist dans le header `x-api-key` de chaque requête :
 ```json
 {
   "headers": {
-    "x-api-key": "votre-clé-grist"
+    "x-api-key": "token-auto-généré-par-grist"
   },
   "body": { ... }
 }
 ```
 
-Une clé par défaut peut être configurée via `GRIST_API_KEY` pour les tests locaux, mais en production la clé est toujours fournie par requête.
+**Important**: Le token est automatiquement généré par le widget frontend via `grist.docApi.getAccessToken()`. Les utilisateurs n'ont plus besoin de copier/coller manuellement leur clé API.
+
+Une clé par défaut peut être configurée via `GRIST_API_KEY` pour les tests locaux, mais en production le token est toujours fourni automatiquement par le widget.
 
 #### Configuration de l'instance Grist
 

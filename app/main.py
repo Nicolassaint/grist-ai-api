@@ -132,9 +132,36 @@ async def chat_endpoint(request: Request):
         
         # Log concis de la requête
         logger.log_chat_request(grist_request.body.documentId, len(grist_request.body.messages))
-        
+
         # Extraction de la clé API et traitement
+        # Debug: afficher tous les headers reçus
+        all_headers = list(grist_request.headers.keys())
+        logger.info(f"🔍 Tous les headers ({len(all_headers)}): {all_headers}")
+
+        # Afficher les valeurs de quelques headers importants
+        for key in ['x-api-key', 'authorization', 'content-type']:
+            value = grist_request.headers.get(key, 'NON TROUVÉ')
+            if value != 'NON TROUVÉ' and len(value) > 20:
+                value = value[:20] + '...'
+            logger.info(f"  📋 {key}: {value}")
+
         grist_api_key = grist_request.headers.get("x-api-key")
+        if not grist_api_key:
+            # Essayer d'autres variantes possibles
+            logger.warning(f"❌ Clé 'x-api-key' non trouvée, recherche alternatives...")
+            for key in grist_request.headers.keys():
+                logger.info(f"    🔎 Vérification header: {key}")
+                if 'api' in key.lower() and 'key' in key.lower():
+                    logger.info(f"📌 Header trouvé: {key} = {grist_request.headers[key][:20]}...")
+                    grist_api_key = grist_request.headers[key]
+                    break
+
+        if grist_api_key:
+            logger.info(f"✅ Token Grist trouvé ({len(grist_api_key)} chars): {grist_api_key[:30]}...")
+        else:
+            logger.error(f"❌ AUCUN token Grist trouvé dans les headers!")
+            logger.error(f"❌ Corps de la requête: {json.dumps(json_data, indent=2)[:500]}")
+
         processed_request = ProcessedRequest.from_grist_request(grist_request, grist_api_key)
         
         # Traitement par l'orchestrateur

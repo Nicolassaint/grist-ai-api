@@ -44,11 +44,13 @@ show_help() {
     echo "  start    Démarrer l'API en mode production sur le port $PORT"
     echo "  stop     Arrêter l'API"
     echo "  restart  Redémarrer l'API en mode production"
+    echo "  debug    Lancer l'API en mode développement au premier plan (logs dans le terminal)"
     echo "  --logs   Activer la journalisation dans un fichier (par défaut: désactivé)"
     echo ""
     echo "Exemples:"
     echo "  $0 start           # Démarrer sans logs"
     echo "  $0 start --logs    # Démarrer avec logs dans $LOG_FILE"
+    echo "  $0 debug           # Lancer en debug (foreground) avec logs dans le terminal"
     echo "  $0 restart --logs  # Redémarrer avec logs"
     echo ""
     exit 1
@@ -160,6 +162,29 @@ start_api() {
     fi
 }
 
+# Fonction pour lancer l'API en mode debug (foreground)
+debug_api() {
+    log_info "Démarrage de l'API en mode DÉVELOPPEMENT (foreground) sur le port $PORT..."
+
+    # Vérification des prérequis (conda, .env)
+    check_prerequisites
+
+    # Changement vers le répertoire du projet
+    cd "$PROJECT_DIR"
+
+    # S'assurer que l'environnement conda est activé
+    eval "$(conda shell.bash hook)"
+    conda activate finetune
+
+    # Commande de base
+    local cmd="python -m app.main"
+
+    log_info "Conseil: appuyez sur CTRL+C pour arrêter le serveur de développement"
+
+    # Lancer au premier plan avec variables d'environnement pour le dev
+    ENV=development DEBUG=1 $cmd
+}
+
 # Fonction pour arrêter l'API
 stop_api() {
     if [ -f "$PID_FILE" ]; then
@@ -252,6 +277,9 @@ case "$1" in
         restart_api
         show_status
         ;;
+        debug)
+            debug_api
+            ;;
     status)
         show_status
         ;;

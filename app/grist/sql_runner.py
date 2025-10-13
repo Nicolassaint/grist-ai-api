@@ -16,10 +16,9 @@ class GristSQLRunner:
             base_url = os.getenv("GRIST_API_BASE_URL", "https://docs.getgrist.com/api")
         self.base_url = base_url.rstrip('/')
         self.logger = AgentLogger("grist_sql_runner")
-        
-        # Headers par défaut
+
+        # Headers par défaut (pas d'Authorization, on utilise le query param auth=)
         self.headers = {
-            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
     
@@ -64,8 +63,9 @@ class GristSQLRunner:
         
         # Encodage de la requête pour l'URL
         encoded_query = urllib.parse.quote(sql_query)
-        url = f"{self.base_url}/docs/{document_id}/sql?q={encoded_query}"
-        
+        # Utilise le query parameter auth= pour les tokens de widget Grist
+        url = f"{self.base_url}/docs/{document_id}/sql?q={encoded_query}&auth={self.api_key}"
+
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url, headers=self.headers)
