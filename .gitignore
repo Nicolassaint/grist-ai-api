@@ -139,3 +139,7 @@ dmypy.json
 Thumbs.db 
 curl_test.sh
 api.pid
+api_prod.log
+
+# Tests
+tests/logs/pytest.log

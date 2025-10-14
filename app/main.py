@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from .models.request import GristRequest, ProcessedRequest, ChatResponse
 from .orchestrator import AIOrchestrator
 from .utils.logging import AgentLogger
+from .pipeline.plans import list_plans, AVAILABLE_PLANS
 
 # Chargement des variables d'environnement
 load_dotenv()
@@ -220,17 +221,18 @@ async def health_check():
 async def get_stats():
     """
     Endpoint pour récupérer les statistiques d'utilisation
-    
+
     Returns:
-        Dict: Statistiques d'utilisation des agents
+        Dict: Statistiques d'utilisation des plans et agents
     """
     try:
         stats = orchestrator.get_stats()
         return {
             "status": "success",
+            "architecture_version": "v2_pipeline",
             "data": stats
         }
-        
+
     except Exception as e:
         logger.error(f"Erreur lors de la récupération des stats: {str(e)}")
         raise HTTPException(
@@ -243,7 +245,7 @@ async def get_stats():
 async def list_agents():
     """
     Endpoint pour lister les agents disponibles et leurs capacités
-    
+
     Returns:
         Dict: Liste des agents et leurs descriptions
     """
@@ -258,7 +260,7 @@ async def list_agents():
             ]
         },
         "sql": {
-            "name": "Agent SQL", 
+            "name": "Agent SQL",
             "description": "Génère des requêtes SQL à partir de langage naturel",
             "capabilities": [
                 "Génération de requêtes SELECT",
@@ -275,21 +277,34 @@ async def list_agents():
                 "Recommandations basées sur les données"
             ]
         },
-        "router": {
-            "name": "Agent de Routing",
-            "description": "Dirige les messages vers l'agent approprié",
+        "architecture": {
+            "name": "Agent d'Architecture",
+            "description": "Conseille sur la structure et l'organisation des données",
             "capabilities": [
-                "Classification automatique des requêtes",
-                "Optimisation du routage",
-                "Gestion du contexte conversationnel"
+                "Analyse de normalisation (1NF, 2NF, 3NF, BCNF)",
+                "Détection des relations entre tables",
+                "Recommandations d'amélioration structurelle",
+                "Métriques de complexité"
             ]
         }
     }
-    
+
+    # Informations sur les plans disponibles
+    plans_info = {}
+    for plan_name, plan in AVAILABLE_PLANS.items():
+        agents_list = [a.value for a in plan.agents]
+        plans_info[plan_name] = {
+            "description": plan.description,
+            "agents": agents_list,
+            "requires_api_key": plan.requires_api_key
+        }
+
     return {
         "status": "success",
+        "architecture": "pipeline",
         "agents": agents_info,
-        "routing_logic": "Automatique basé sur l'analyse du contenu du message"
+        "plans": plans_info,
+        "routing_logic": "Le router choisit automatiquement le plan d'exécution approprié basé sur l'intention de l'utilisateur"
     }
 
 

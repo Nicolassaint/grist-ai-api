@@ -1,352 +1,405 @@
-import openai
-from typing import Dict, Any, Optional
-import uuid
-import os
-from dotenv import load_dotenv
+"""
+═══════════════════════════════════════════════════════════════════════════════
+AI ORCHESTRATOR V2 - Coordinateur principal avec système de pipeline
+═══════════════════════════════════════════════════════════════════════════════
 
-from .models.message import ConversationHistory, Message
+RÔLE:
+    L'orchestrateur est le point d'entrée principal de l'API. Il coordonne
+    l'exécution des agents via un système de pipeline modulaire.
+
+ARCHITECTURE:
+    ┌─────────────────┐
+    │  FastAPI Route  │
+    └────────┬────────┘
+             │
+             ↓
+    ┌─────────────────┐
+    │  Orchestrator   │ ← Vous êtes ici
+    └────────┬────────┘
+             │
+             ├→ Router Agent (choisit un plan)
+             │
+             ├→ Pipeline Executor (exécute le plan)
+             │   │
+             │   ├→ Generic Agent
+             │   ├→ SQL Agent
+             │   ├→ Analysis Agent
+             │   └→ Architecture Agent
+             │
+             └→ ChatResponse (retournée à l'utilisateur)
+
+FLUX D'EXÉCUTION:
+    1. Réception ProcessedRequest
+    2. Router choisit un ExecutionPlan
+    3. Construction du ExecutionContext
+    4. PipelineExecutor exécute les agents séquentiellement
+    5. Chaque agent enrichit le contexte
+    6. Retour ChatResponse finale
+
+AVANTAGES DU SYSTÈME:
+    ✅ Modulaire: Facile d'ajouter/retirer des agents
+    ✅ Testable: Chaque composant testé indépendamment
+    ✅ Extensible: Nouveaux plans = quelques lignes
+    ✅ Maintenable: Code clair et bien séparé
+    ✅ Traçable: Contexte garde l'historique d'exécution
+
+EXEMPLE D'UTILISATION:
+    >>> orchestrator = AIOrchestrator()
+    >>> request = ProcessedRequest(...)
+    >>> response = await orchestrator.process_chat_request(request)
+    >>> print(response.response)
+
+═══════════════════════════════════════════════════════════════════════════════
+"""
+
+import openai
+import os
+import uuid
+from typing import Dict, Any
 from .models.request import ProcessedRequest, ChatResponse
+from .models.message import ConversationHistory
 from .utils.logging import AgentLogger
-from .grist.schema_fetcher import GristSchemaFetcher
-from .grist.sql_runner import GristSQLRunner
-from .agents.router_agent import RouterAgent, AgentType
+
+# Agents
+from .agents.router_agent import RouterAgent
 from .agents.generic_agent import GenericAgent
 from .agents.sql_agent import SQLAgent
 from .agents.analysis_agent import AnalysisAgent
+from .agents.architecture_agent import DataArchitectureAgent
 
-load_dotenv()
+# Pipeline
+from .pipeline.context import ExecutionContext
+from .pipeline.executor import PipelineExecutor
+from .pipeline.plans import AgentType
+
+# Grist
+from .grist.schema_fetcher import GristSchemaFetcher
+from .grist.sql_runner import GristSQLRunner
 
 
 class AIOrchestrator:
-    """Orchestrateur principal qui coordonne tous les agents IA"""
-    
+    """
+    Orchestrateur principal gérant le pipeline d'agents.
+
+    Responsabilités:
+        1. Initialiser tous les agents nécessaires
+        2. Recevoir les requêtes utilisateur
+        3. Coordonner le router et le pipeline executor
+        4. Gérer les erreurs globales
+        5. Retourner les réponses formatées
+
+    Attributes:
+        router: Agent de routing (choix du plan)
+        executor: Exécuteur de pipeline
+        agents: Dictionnaire des agents disponibles
+        openai_client: Client OpenAI partagé
+        logger: Logger pour traçabilité
+    """
+
     def __init__(self):
+        """
+        Initialise l'orchestrateur et tous ses composants.
+
+        Configuration depuis variables d'environnement:
+            - OPENAI_API_KEY: Clé API OpenAI (obligatoire)
+            - OPENAI_API_BASE: URL de base custom (optionnel)
+            - DEFAULT_MODEL: Modèle par défaut (défaut: mistral-small)
+            - ANALYSIS_MODEL: Modèle pour analyses (défaut: mistral-small)
+        """
         self.logger = AgentLogger("orchestrator")
-        
-        # Configuration OpenAI (Albert/Etalab)
+
+        # Configuration OpenAI
+        api_key = os.getenv("OPENAI_API_KEY")
+        api_base = os.getenv("OPENAI_API_BASE", "https://api.olympia.bhub.cloud/v1")
+
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY manquante")
+
         self.openai_client = openai.AsyncOpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            base_url=os.getenv("OPENAI_API_BASE")
+            api_key=api_key,
+            base_url=api_base
         )
-        
-        # Configuration des modèles depuis les variables d'environnement
-        self.default_model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
-        self.analysis_model = os.getenv("OPENAI_ANALYSIS_MODEL", "gpt-4")
-        
-        # Configuration par défaut pour Grist (optionnelle, pour les tests)
-        self.default_grist_key = os.getenv("GRIST_API_KEY", None)
-        
-        # Initialisation des composants
-        self._init_components()
-        
+
+        # Modèles
+        self.default_model = os.getenv("DEFAULT_MODEL", "mistral-small")
+        self.analysis_model = os.getenv("ANALYSIS_MODEL", "mistral-small")
+
+        # Initialisation des agents
+        self._initialize_agents()
+
         # Statistiques d'utilisation
         self.stats = {
             "total_requests": 0,
-            "agent_usage": {agent_type.value: 0 for agent_type in AgentType}
+            "plan_usage": {
+                "generic": 0,
+                "data_query": 0,
+                "architecture_review": 0
+            },
+            "errors": 0
         }
-    
-    def _init_components(self):
-        """Initialise tous les composants (agents et intégrations)"""
-        # Agents IA avec modèles configurés
-        self.router_agent = RouterAgent(self.openai_client, self.default_model)
-        self.generic_agent = GenericAgent(self.openai_client, self.default_model)
-        self.analysis_agent = AnalysisAgent(self.openai_client, self.analysis_model)
-        
-        # Note: Les composants Grist sont initialisés par requête car ils dépendent de la clé API
-        self.logger.info("Orchestrateur initialisé avec succès", 
-                        default_model=self.default_model,
-                        analysis_model=self.analysis_model)
-    
-    async def process_chat_request(self, processed_request: ProcessedRequest) -> ChatResponse:
+
+        self.logger.info(
+            "✅ Orchestrateur initialisé avec succès",
+            default_model=self.default_model,
+            analysis_model=self.analysis_model
+        )
+
+    def _initialize_agents(self):
         """
-        Traite une requête de chat complète
-        
+        Initialise tous les agents du système.
+
+        Cette méthode crée:
+            - Router Agent (choix de plan)
+            - Generic Agent (conversation)
+            - SQL Agent (requêtes données)
+            - Analysis Agent (analyse résultats)
+            - Architecture Agent (conseil structure)
+            - Pipeline Executor (orchestration)
+        """
+        # Router
+        self.router = RouterAgent(
+            self.openai_client,
+            model=self.default_model
+        )
+
+        # Agents métier
+        self.generic_agent = GenericAgent(
+            self.openai_client,
+            model=self.default_model
+        )
+
+        self.analysis_agent = AnalysisAgent(
+            self.openai_client,
+            model=self.analysis_model
+        )
+
+        # Agents nécessitant Grist (créés à la demande avec clé API)
+        # SQL Agent et Architecture Agent seront créés dynamiquement
+
+        # Mapping pour le pipeline executor
+        self.base_agents = {
+            AgentType.GENERIC: self.generic_agent,
+            AgentType.ANALYSIS: self.analysis_agent,
+            # SQL et ARCHITECTURE seront ajoutés dynamiquement
+        }
+
+    def _create_agents_with_grist_key(self, grist_api_key: str) -> Dict[AgentType, Any]:
+        """
+        Crée les agents nécessitant une clé API Grist.
+
         Args:
-            processed_request: Requête traitée contenant les messages et métadonnées
-            
+            grist_api_key: Clé API Grist
+
         Returns:
-            ChatResponse: Réponse structurée avec les détails de traitement
+            Dictionnaire complet des agents (base + Grist)
+        """
+        # Initialiser les utilitaires Grist
+        schema_fetcher = GristSchemaFetcher(grist_api_key)
+        sql_runner = GristSQLRunner(grist_api_key)
+
+        # Créer les agents Grist
+        sql_agent = SQLAgent(
+            self.openai_client,
+            schema_fetcher,
+            sql_runner,
+            model=self.default_model
+        )
+
+        architecture_agent = DataArchitectureAgent(
+            self.openai_client,
+            schema_fetcher,
+            model=self.analysis_model
+        )
+
+        # Merger avec les agents de base
+        all_agents = {**self.base_agents}
+        all_agents[AgentType.SQL] = sql_agent
+        all_agents[AgentType.ARCHITECTURE] = architecture_agent
+
+        return all_agents
+
+    async def process_chat_request(self, request: ProcessedRequest) -> ChatResponse:
+        """
+        Traite une requête chat complète via le pipeline d'agents.
+
+        C'est la méthode principale appelée par l'API FastAPI.
+
+        Args:
+            request: Requête traitée contenant:
+                - document_id: ID du document Grist
+                - messages: Historique de conversation
+                - grist_api_key: Clé API Grist
+                - execution_mode: Mode d'exécution (prod/test)
+
+        Returns:
+            ChatResponse avec:
+                - response: Texte de réponse
+                - agent_used: Agent ayant généré la réponse
+                - sql_query: Requête SQL éventuelle
+                - data_analyzed: Flag d'analyse de données
+                - error: Message d'erreur éventuel
+
+        Exemple:
+            >>> request = ProcessedRequest(document_id="doc-123", ...)
+            >>> response = await orchestrator.process_chat_request(request)
+            >>> print(response.response)
+            "Voici vos 10 dernières ventes..."
         """
         request_id = str(uuid.uuid4())
         self.stats["total_requests"] += 1
-        
+
         self.logger.info(
-            "Nouvelle requête de chat",
+            "🚀 Nouvelle requête de chat",
             request_id=request_id,
-            document_id=processed_request.document_id,
-            messages_count=len(processed_request.messages)
+            document_id=request.document_id,
+            messages_count=len(request.messages)
         )
-        
+
         try:
-            # 1. Extraction du dernier message utilisateur
-            conversation_history = ConversationHistory(messages=processed_request.messages)
-            last_user_message = conversation_history.get_last_user_message()
-            
-            if not last_user_message:
+            # 1. Extraire le message utilisateur
+            conversation_history = ConversationHistory(messages=request.messages)
+            user_message = conversation_history.get_last_user_message()
+
+            if not user_message:
                 return ChatResponse(
-                    response="Aucun message utilisateur trouvé dans la conversation.",
-                    agent_used=AgentType.GENERIC.value,
-                    error="No user message found"
+                    response="Aucun message utilisateur trouvé dans la requête.",
+                    agent_used="orchestrator",
+                    error="No user message"
                 )
-            
-            # 2. Routing du message vers l'agent approprié
-            selected_agent = await self.router_agent.route_message(
-                last_user_message.content, 
-                conversation_history, 
-                request_id
-            )
-            
-            self.stats["agent_usage"][selected_agent.value] += 1
-            
-            # 3. Traitement par l'agent sélectionné
-            response_data = await self._process_with_agent(
-                selected_agent, 
-                last_user_message.content,
+
+            # 2. Router → Choisir le plan d'exécution
+            plan = await self.router.route_to_plan(
+                user_message.content,
                 conversation_history,
-                processed_request,
                 request_id
             )
-            
-            # Logs détaillés du résultat de l'orchestrateur
+
             self.logger.info(
-                "🎯 Traitement orchestrateur terminé",
+                f"📋 Plan sélectionné: {plan.name}",
                 request_id=request_id,
-                selected_agent=selected_agent.value,
-                final_agent_used=response_data.agent_used,
-                response_length=len(response_data.response),
-                has_sql_query=response_data.sql_query is not None,
-                data_analyzed=response_data.data_analyzed,
-                has_error=response_data.error is not None
+                agents=str([a.value for a in plan.agents])
             )
-            
-            if response_data.sql_query:
-                self.logger.info(
-                    "📋 Requête SQL dans la réponse",
-                    request_id=request_id,
-                    sql_query=response_data.sql_query
-                )
-            
-            return response_data
-            
+
+            # Mettre à jour les stats
+            self.stats["plan_usage"][plan.name] += 1
+
+            # 3. Créer le contexte d'exécution
+            context = ExecutionContext(
+                user_message=user_message.content,
+                conversation_history=conversation_history,
+                document_id=request.document_id,
+                grist_api_key=request.grist_api_key,
+                request_id=request_id
+            )
+
+            # 4. Préparer les agents (avec Grist si nécessaire)
+            if plan.requires_api_key:
+                if not request.grist_api_key:
+                    return ChatResponse(
+                        response="Cette opération nécessite une clé API Grist.",
+                        agent_used="orchestrator",
+                        error="Missing Grist API key"
+                    )
+                agents = self._create_agents_with_grist_key(request.grist_api_key)
+            else:
+                agents = self.base_agents
+
+            # 5. Créer l'executor et exécuter le pipeline
+            executor = PipelineExecutor(agents)
+            response = await executor.execute(plan, context)
+
+            self.logger.info(
+                "✅ Requête traitée avec succès",
+                request_id=request_id,
+                plan_name=plan.name,
+                agent_used=response.agent_used,
+                has_error=response.error is not None
+            )
+
+            return response
+
         except Exception as e:
+            self.stats["errors"] += 1
             self.logger.error(
-                f"Erreur lors du traitement de la requête: {str(e)}",
+                f"❌ Erreur lors du traitement de la requête: {str(e)}",
                 request_id=request_id,
-                document_id=processed_request.document_id
+                document_id=request.document_id
             )
-            
+
             return ChatResponse(
-                response=f"Désolé, j'ai rencontré une erreur technique : {str(e)}",
-                agent_used=AgentType.GENERIC.value,
+                response=f"Désolé, une erreur s'est produite: {str(e)}",
+                agent_used="orchestrator",
                 error=str(e)
             )
-    
-    async def _process_with_agent(self, agent_type: AgentType, user_message: str,
-                                conversation_history: ConversationHistory,
-                                processed_request: ProcessedRequest,
-                                request_id: str) -> ChatResponse:
-        """Traite le message avec l'agent sélectionné"""
-        
-        if agent_type == AgentType.GENERIC:
-            return await self._process_generic(user_message, conversation_history, request_id)
-        
-        elif agent_type == AgentType.SQL:
-            return await self._process_sql(user_message, conversation_history, processed_request, request_id)
-        
-        elif agent_type == AgentType.ANALYSIS:
-            # Pour l'analyse, on a besoin de données SQL existantes
-            # Si pas de données dans l'historique, on redirige vers SQL d'abord
-            return await self._process_analysis_or_redirect(user_message, conversation_history, processed_request, request_id)
-        
-        else:
-            # Fallback vers générique
-            return await self._process_generic(user_message, conversation_history, request_id)
-    
-    async def _process_generic(self, user_message: str, conversation_history: ConversationHistory, 
-                             request_id: str) -> ChatResponse:
-        """Traite avec l'agent générique"""
-        
-        response_text = await self.generic_agent.process_message(
-            user_message, conversation_history, request_id
-        )
-        
-        # Log du résultat de l'agent générique
-        self.logger.info(
-            "💬 Résultat agent générique",
-            request_id=request_id,
-            response_length=len(response_text),
-            response_preview=response_text[:150] + "..." if len(response_text) > 150 else response_text
-        )
-        
-        return ChatResponse(
-            response=response_text,
-            agent_used=AgentType.GENERIC.value
-        )
-    
-    async def _process_sql(self, user_message: str, conversation_history: ConversationHistory,
-                         processed_request: ProcessedRequest, request_id: str) -> ChatResponse:
-        """Traite avec l'agent SQL puis analyse automatiquement"""
-        
-        # Initialisation des composants Grist pour cette requête
-        grist_key = processed_request.grist_api_key or self.default_grist_key
-        if not grist_key:
-            self.logger.warning(
-                "⚠️ Clé API Grist manquante",
-                request_id=request_id,
-                document_id=processed_request.document_id
-            )
-            return ChatResponse(
-                response="Configuration manquante : clé API Grist non fournie.",
-                agent_used=AgentType.SQL.value,
-                error="Missing Grist API key"
-            )
-        
-        schema_fetcher = GristSchemaFetcher(grist_key)
-        sql_runner = GristSQLRunner(grist_key)
-        sql_agent = SQLAgent(self.openai_client, schema_fetcher, sql_runner, self.analysis_model)
-        
-        self.logger.info(
-            "🔧 Composants Grist initialisés",
-            request_id=request_id,
-            document_id=processed_request.document_id,
-            has_grist_key=bool(grist_key)
-        )
-        
-        # Traitement SQL
-        response_text, sql_query, sql_results = await sql_agent.process_message(
-            user_message, conversation_history, processed_request.document_id, request_id
-        )
-        
-        # Logs détaillés des résultats SQL
-        self.logger.info(
-            "🗄️ Résultat agent SQL",
-            request_id=request_id,
-            response_length=len(response_text),
-            sql_query_length=len(sql_query) if sql_query else 0,
-            sql_success=sql_results.get("success", False) if sql_results else False,
-            sql_row_count=sql_results.get("row_count", 0) if sql_results else 0
-        )
-        
-        if sql_results:
-            self.logger.info(
-                "📊 Détails résultats SQL",
-                request_id=request_id,
-                sql_results_keys=list(sql_results.keys()),
-                sql_data_preview=str(sql_results.get("data", []))[:200] + "..." if sql_results.get("data") and len(str(sql_results.get("data", []))) > 200 else str(sql_results.get("data", [])),
-                sql_error=sql_results.get("error")
-            )
-        
-        # ANALYSE INTELLIGENTE après une requête SQL réussie
-        if sql_results and sql_results.get("success"):
-            # Vérifier s'il y a des données à analyser
-            has_data = sql_results.get("data") and len(sql_results.get("data", [])) > 0
-            
-            if has_data:
-                self.logger.info(
-                    "🔬 Analyse automatique avec données",
-                    request_id=request_id,
-                    sql_success=True,
-                    data_count=len(sql_results.get("data", []))
-                )
-                
-                analysis_text = await self.analysis_agent.process_message(
-                    user_message, conversation_history, sql_query, sql_results, request_id
-                )
-                
-                self.logger.info(
-                    "📈 Résultat analyse automatique",
-                    request_id=request_id,
-                    analysis_length=len(analysis_text),
-                    analysis_preview=analysis_text[:150] + "..." if len(analysis_text) > 150 else analysis_text
-                )
-                
-                # Retourner UNIQUEMENT l'analyse (pas de concaténation)
-                return ChatResponse(
-                    response=analysis_text,
-                    agent_used=AgentType.ANALYSIS.value,
-                    sql_query=sql_query,
-                    data_analyzed=True
-                )
-            else:
-                # Cas particulier : requête réussie mais aucun résultat
-                # Ce n'est PAS une erreur, juste une absence de données correspondantes
-                self.logger.info(
-                    "✅ Requête SQL réussie mais sans résultats",
-                    request_id=request_id,
-                    sql_success=True,
-                    data_count=0
-                )
-                
-                # Retourner directement la réponse SQL optimisée pour les résultats vides
-                return ChatResponse(
-                    response=response_text,
-                    agent_used=AgentType.SQL.value,
-                    sql_query=sql_query,
-                    data_analyzed=False
-                )
-        else:
-            # Si échec SQL, pas d'analyse possible
-            self.logger.warning(
-                "⚠️ Pas d'analyse car échec SQL",
-                request_id=request_id,
-                sql_success=False,
-                sql_error=sql_results.get("error") if sql_results else "Aucun résultat"
-            )
-        
-        return ChatResponse(
-            response=response_text,
-            agent_used=AgentType.SQL.value,
-            sql_query=sql_query,
-            data_analyzed=False
-        )
-    
-    async def _process_analysis_or_redirect(self, user_message: str, conversation_history: ConversationHistory,
-                                          processed_request: ProcessedRequest, request_id: str) -> ChatResponse:
-        """Traite l'analyse ou redirige vers SQL si pas de données"""
-        
-        # Recherche de données SQL dans l'historique récent
-        recent_messages = conversation_history.get_recent_messages(5)
-        
-        # Pour simplifier, on redirige vers SQL + analyse
-        return await self._process_sql(user_message, conversation_history, processed_request, request_id)
-    
-    def get_stats(self) -> Dict[str, Any]:
-        """Retourne les statistiques d'utilisation"""
-        return {
-            "total_requests": self.stats["total_requests"],
-            "agent_usage": self.stats["agent_usage"].copy(),
-            "most_used_agent": max(self.stats["agent_usage"], key=self.stats["agent_usage"].get)
-        }
-    
+
     async def health_check(self) -> Dict[str, Any]:
-        """Vérifie l'état de santé du système"""
-        health_status = {
-            "status": "healthy",
-            "components": {},
-            "timestamp": str(uuid.uuid4())  # Simplification pour le timestamp
-        }
-        
-        # Test de l'API OpenAI
+        """
+        Vérification de santé du système.
+
+        Teste:
+            - Connexion OpenAI
+            - Disponibilité des agents
+            - État général
+
+        Returns:
+            Dictionnaire avec statut de santé
+
+        Exemple:
+            >>> health = await orchestrator.health_check()
+            >>> print(health["status"])
+            "healthy"
+        """
         try:
-            await self.openai_client.chat.completions.create(
+            # Test simple avec OpenAI
+            response = await self.openai_client.chat.completions.create(
                 model=self.default_model,
                 messages=[{"role": "user", "content": "test"}],
-                max_tokens=1
+                max_tokens=5
             )
-            health_status["components"]["openai"] = "healthy"
+
+            return {
+                "status": "healthy",
+                "components": {
+                    "openai": "ok",
+                    "router": "ok",
+                    "agents": {
+                        "generic": "ok",
+                        "analysis": "ok"
+                    }
+                },
+                "stats": self.get_stats()
+            }
         except Exception as e:
-            health_status["components"]["openai"] = f"error: {str(e)}"
-            health_status["status"] = "degraded"
-        
-        # Test Grist (si clé disponible)
-        if self.default_grist_key:
-            try:
-                schema_fetcher = GristSchemaFetcher(self.default_grist_key)
-                # Test simple (on ne peut pas tester sans document ID)
-                health_status["components"]["grist"] = "configured"
-            except Exception as e:
-                health_status["components"]["grist"] = f"error: {str(e)}"
-        else:
-            health_status["components"]["grist"] = "not_configured"
-        
-        return health_status 
+            return {
+                "status": "unhealthy",
+                "error": str(e),
+                "stats": self.get_stats()
+            }
+
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Retourne les statistiques d'utilisation.
+
+        Returns:
+            Dictionnaire avec:
+                - total_requests: Nombre total de requêtes
+                - plan_usage: Utilisation par plan
+                - errors: Nombre d'erreurs
+                - most_used_plan: Plan le plus utilisé
+
+        Exemple:
+            >>> stats = orchestrator.get_stats()
+            >>> print(stats["total_requests"])
+            142
+        """
+        # Trouver le plan le plus utilisé
+        most_used_plan = max(
+            self.stats["plan_usage"].items(),
+            key=lambda x: x[1],
+            default=("none", 0)
+        )[0]
+
+        return {
+            **self.stats,
+            "most_used_plan": most_used_plan
+        }

@@ -1,151 +1,280 @@
+"""
+═══════════════════════════════════════════════════════════════════════════════
+ROUTER AGENT - Agent de routage intelligent
+═══════════════════════════════════════════════════════════════════════════════
+
+RÔLE:
+    Le Router Agent analyse le message de l'utilisateur et choisit le PLAN
+    d'exécution approprié (séquence d'agents à exécuter).
+
+FONCTIONNEMENT:
+    1. Reçoit le message utilisateur + historique conversationnel
+    2. Utilise un LLM (GPT) pour classifier l'intention
+    3. Map l'intention vers un plan d'exécution
+    4. Retourne le plan (pas un agent unique!)
+
+PLANS DISPONIBLES:
+    - "generic": Conversation simple → [Generic Agent]
+    - "data_query": Requête SQL → [SQL Agent, Analysis Agent]
+    - "architecture_review": Analyse structure → [Architecture Agent]
+    - "full_analysis": Analyse complète → [Architecture, SQL, Analysis]
+
+EXEMPLES:
+    User: "Bonjour!"
+    → Router: Intention = conversational → Plan "generic"
+    → Executor: Generic Agent répond
+
+    User: "Montre-moi les ventes"
+    → Router: Intention = data_extraction → Plan "data_query"
+    → Executor: SQL Agent (génère requête) → Analysis Agent (analyse résultats)
+
+    User: "Ma structure est-elle bien organisée?"
+    → Router: Intention = structure_review → Plan "architecture_review"
+    → Executor: Architecture Agent analyse les schémas
+
+AMÉLIORATIONS FUTURES:
+    - Cache des décisions pour patterns fréquents
+    - Fine-tuning du LLM sur les intentions Grist
+    - Détection de patterns multi-tours (suite de conversation)
+
+═══════════════════════════════════════════════════════════════════════════════
+"""
+
 import openai
-from typing import Dict, Any, Optional
-from ..models.message import Message, ConversationHistory
+from typing import Dict, Any
+from ..models.message import ConversationHistory
 from ..utils.logging import AgentLogger
+from ..pipeline.plans import ExecutionPlan, get_plan, AVAILABLE_PLANS
 import time
-import os
-from enum import Enum
-
-
-class AgentType(str, Enum):
-    """Types d'agents disponibles"""
-    GENERIC = "generic"
-    SQL = "sql"
-    ANALYSIS = "analysis"
 
 
 class RouterAgent:
-    """Agent de routing qui dirige les messages vers l'agent approprié"""
-    
+    """
+    Agent de routage qui choisit le plan d'exécution approprié.
+
+    Le router ne choisit plus un agent unique, mais un PLAN complet
+    (séquence ordonnée d'agents) basé sur l'intention de l'utilisateur.
+    """
+
     def __init__(self, openai_client: openai.AsyncOpenAI, model: str = "gpt-3.5-turbo"):
+        """
+        Initialise le router.
+
+        Args:
+            openai_client: Client OpenAI pour classification
+            model: Modèle LLM à utiliser (gpt-3.5-turbo par défaut)
+        """
         self.client = openai_client
         self.model = model
         self.logger = AgentLogger("router_agent")
-        
-        self.routing_prompt = """Tu es un agent de routing intelligent pour un système d'IA d'analyse de données Grist.
 
-Ta mission est de déterminer quel agent doit traiter la requête utilisateur parmi :
+        # Prompt système pour la classification d'intention
+        self.routing_prompt = self._build_routing_prompt()
 
-1. **GENERIC** : Questions générales, salutations, petit talk, demandes d'aide générale
-2. **SQL** : Demandes d'extraction de données, questions nécessitant une requête SQL
-3. **ANALYSIS** : Demandes d'analyse de données existantes, d'insights, de tendances
+    def _build_routing_prompt(self) -> str:
+        """Construit le prompt de routing avec les plans disponibles"""
+        plans_description = []
+        for plan_name, plan in AVAILABLE_PLANS.items():
+            agents_list = " → ".join([a.value for a in plan.agents])
+            plans_description.append(f"- **{plan_name}**: {plan.description} [{agents_list}]")
 
-Exemples :
-- "Bonjour, comment ça va ?" → GENERIC
-- "Peux-tu m'aider ?" → GENERIC  
-- "Montre-moi les ventes du mois dernier" → SQL
-- "Combien d'utilisateurs avons-nous ?" → SQL
-- "Analyse les tendances des ventes" → SQL (puis ANALYSIS)
-- "Que penses-tu de ces résultats ?" → ANALYSIS
+        return f"""Tu es un agent de routing intelligent pour Grist AI Assistant.
 
-Instructions importantes :
-- Si la question concerne des données spécifiques = SQL
-- Si la question demande une analyse sur des données déjà récupérées = ANALYSIS
-- Si c'est général/conversationnel = GENERIC
-- En cas de doute entre SQL et ANALYSIS, choisis SQL
+Ta mission: analyser le message utilisateur et choisir le BON PLAN d'exécution.
 
-Réponds UNIQUEMENT par : GENERIC, SQL ou ANALYSIS"""
-    
-    async def route_message(self, user_message: str, conversation_history: ConversationHistory, request_id: str) -> AgentType:
-        """Détermine quel agent doit traiter le message"""
+PLANS DISPONIBLES:
+{chr(10).join(plans_description)}
+
+RÈGLES DE DÉCISION:
+1. **generic**: Questions générales, salutations, aide, conversations simples
+   Exemples: "Bonjour", "Comment ça marche?", "Merci", "Qu'est-ce que Grist?"
+
+2. **data_query**: L'utilisateur veut RÉCUPÉRER des données spécifiques et les ANALYSER
+   Exemples: "Montre les ventes", "Combien de clients?", "Liste les commandes du mois"
+   Mots-clés: montre, combien, liste, affiche, extrait, résultats, données
+   Note: Ce plan exécute SQL puis Analysis automatiquement
+
+3. **architecture_review**: L'utilisateur veut un CONSEIL sur la STRUCTURE des données
+   Exemples: "Ma structure est bonne?", "Comment organiser mes tables?", "Mes relations sont OK?", "Avis sur ma donnée"
+   Mots-clés: structure, organisation, normalisation, relations, schéma, architecture, conseil, avis, critique
+   Note: Analyse UNIQUEMENT les schémas, pas le contenu des données
+
+IMPORTANT:
+- Si l'utilisateur demande un AVIS/CONSEIL sur sa structure → architecture_review
+- Si l'utilisateur veut des DONNÉES spécifiques → data_query
+- Si c'est une question GÉNÉRALE → generic
+- En cas de doute entre architecture et data → choisis celui qui correspond le mieux aux mots-clés
+
+Réponds UNIQUEMENT par le nom du plan: generic, data_query, ou architecture_review"""
+
+    async def route_to_plan(
+        self,
+        user_message: str,
+        conversation_history: ConversationHistory,
+        request_id: str
+    ) -> ExecutionPlan:
+        """
+        Détermine le plan d'exécution approprié pour le message.
+
+        Args:
+            user_message: Message de l'utilisateur
+            conversation_history: Historique de conversation
+            request_id: ID unique de la requête (pour logging)
+
+        Returns:
+            ExecutionPlan: Plan d'exécution à suivre
+
+        Exemple:
+            >>> plan = await router.route_to_plan(
+            ...     "Montre-moi les ventes",
+            ...     conversation_history,
+            ...     "req-123"
+            ... )
+            >>> print(plan.name)
+            'data_query'
+            >>> print(plan.agents)
+            [AgentType.SQL, AgentType.ANALYSIS]
+        """
         start_time = time.time()
-        
+
         self.logger.log_agent_start(request_id, user_message)
-        
+
         try:
-            # Construction du contexte pour le routing
-            context_messages = [
-                {"role": "system", "content": self.routing_prompt},
-                {"role": "user", "content": f"Message à router: {user_message}"}
-            ]
-            
-            # Ajout du contexte conversationnel récent
-            recent_messages = conversation_history.get_recent_messages(3)
-            if recent_messages:
-                context = "Contexte récent de la conversation:\n"
-                for msg in recent_messages[:-1]:  # Exclure le dernier message (c'est celui qu'on route)
-                    context += f"- {msg.role}: {msg.content[:100]}\n"
-                context_messages.insert(1, {"role": "system", "content": context})
-            
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=context_messages,
-                max_tokens=10,
-                temperature=0.1
+            # Appel LLM pour classifier l'intention
+            plan_name = await self._classify_intent(
+                user_message,
+                conversation_history,
+                request_id
             )
-            
-            routing_decision = response.choices[0].message.content.strip().upper()
-            
-            # Validation et mapping
-            agent_mapping = {
-                "GENERIC": AgentType.GENERIC,
-                "SQL": AgentType.SQL, 
-                "ANALYSIS": AgentType.ANALYSIS
-            }
-            
-            selected_agent = agent_mapping.get(routing_decision, AgentType.GENERIC)
-            
+
+            # Récupérer le plan correspondant
+            try:
+                plan = get_plan(plan_name)
+            except KeyError:
+                # Plan inconnu → fallback sur generic
+                self.logger.warning(
+                    f"Plan inconnu '{plan_name}', fallback sur generic",
+                    request_id=request_id
+                )
+                plan = get_plan("generic")
+
             execution_time = time.time() - start_time
+
             self.logger.log_agent_response(
-                request_id, 
-                f"Routé vers: {selected_agent}",
+                request_id,
+                f"Plan sélectionné: {plan.name}",
                 execution_time
             )
-            
+
             self.logger.info(
-                "Message routé avec succès",
+                "✅ Routing terminé",
                 request_id=request_id,
-                selected_agent=selected_agent.value,
-                routing_decision=routing_decision
+                plan_name=plan.name,
+                agents_count=len(plan.agents),
+                requires_api_key=plan.requires_api_key
             )
-            
-            return selected_agent
-            
+
+            return plan
+
         except Exception as e:
             execution_time = time.time() - start_time
             self.logger.error(
-                f"Erreur lors du routing: {str(e)}",
+                f"❌ Erreur lors du routing: {str(e)}",
                 request_id=request_id,
                 execution_time=execution_time
             )
-            # En cas d'erreur, retour vers l'agent générique
-            return AgentType.GENERIC
-    
-    def should_use_sql_then_analysis(self, user_message: str) -> bool:
-        """Détermine si on doit utiliser SQL puis ANALYSIS"""
-        analysis_keywords = [
-            "analyse", "tendance", "insight", "résumé", "compare", 
-            "évolution", "pattern", "corrélation", "moyenne", "total",
-            "maximum", "minimum", "statistique"
+            # Fallback sur plan generic en cas d'erreur
+            return get_plan("generic")
+
+    async def _classify_intent(
+        self,
+        user_message: str,
+        conversation_history: ConversationHistory,
+        request_id: str
+    ) -> str:
+        """
+        Utilise le LLM pour classifier l'intention et retourner le nom du plan.
+
+        Args:
+            user_message: Message à classifier
+            conversation_history: Contexte conversationnel
+            request_id: ID de requête
+
+        Returns:
+            Nom du plan (ex: "data_query")
+        """
+        # Construction des messages pour le LLM
+        messages = [
+            {"role": "system", "content": self.routing_prompt}
         ]
-        
-        data_keywords = [
-            "vente", "utilisateur", "client", "commande", "produit",
-            "données", "table", "ligne", "colonne"
-        ]
-        
-        message_lower = user_message.lower()
-        
-        has_analysis = any(keyword in message_lower for keyword in analysis_keywords)
-        has_data = any(keyword in message_lower for keyword in data_keywords)
-        
-        return has_analysis and has_data
-    
-    async def explain_routing(self, user_message: str, selected_agent: AgentType, request_id: str) -> str:
-        """Explique pourquoi ce routage a été choisi (pour debug)"""
-        explanations = {
-            AgentType.GENERIC: "Question générale ou conversationnelle",
-            AgentType.SQL: "Requête nécessitant l'extraction de données",
-            AgentType.ANALYSIS: "Demande d'analyse de données"
-        }
-        
-        explanation = explanations.get(selected_agent, "Routage par défaut")
-        
-        self.logger.debug(
-            f"Explication du routage: {explanation}",
-            request_id=request_id,
-            user_message=user_message[:100],
-            selected_agent=selected_agent.value
+
+        # Ajout du contexte conversationnel (3 derniers messages)
+        recent_messages = conversation_history.get_recent_messages(3)
+        if len(recent_messages) > 1:
+            context = "Contexte récent:\n"
+            for msg in recent_messages[:-1]:  # Exclure le message actuel
+                context += f"- {msg.role}: {msg.content[:100]}\n"
+            messages.append({"role": "system", "content": context})
+
+        # Message utilisateur à classifier
+        messages.append({
+            "role": "user",
+            "content": f"Message à router: {user_message}"
+        })
+
+        # Appel LLM
+        response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            max_tokens=20,
+            temperature=0.1  # Peu de créativité pour classification
         )
-        
-        return explanation 
+
+        plan_name = response.choices[0].message.content.strip().lower()
+
+        self.logger.debug(
+            f"Intention classifiée: {plan_name}",
+            request_id=request_id,
+            user_message_preview=user_message[:100]
+        )
+
+        return plan_name
+
+    async def explain_routing(
+        self,
+        user_message: str,
+        plan: ExecutionPlan,
+        request_id: str
+    ) -> str:
+        """
+        Génère une explication lisible de la décision de routing.
+
+        Utile pour debugging et logs.
+
+        Args:
+            user_message: Message original
+            plan: Plan sélectionné
+            request_id: ID de requête
+
+        Returns:
+            Explication textuelle
+
+        Exemple:
+            >>> explanation = await router.explain_routing(...)
+            >>> print(explanation)
+            "Message 'Montre les ventes' → Plan 'data_query' car extraction de données détectée"
+        """
+        agents_str = " → ".join([a.value for a in plan.agents])
+
+        explanation = (
+            f"Message '{user_message[:50]}...' → "
+            f"Plan '{plan.name}' [{agents_str}] - "
+            f"{plan.description}"
+        )
+
+        self.logger.debug(
+            f"Explication routing: {explanation}",
+            request_id=request_id
+        )
+
+        return explanation
