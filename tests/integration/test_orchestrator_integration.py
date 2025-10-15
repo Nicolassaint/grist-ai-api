@@ -38,17 +38,27 @@ class TestOrchestratorIntegration:
         assert "data_query" in stats["plan_usage"]
         assert "architecture_review" in stats["plan_usage"]
 
-    async def test_health_check(self):
+    async def test_health_check(self, mocker):
         """Test: Vérification de santé du système"""
         # Arrange
         orch = AIOrchestrator()
+        
+        # Mock de la réponse OpenAI pour éviter les appels réels à l'API
+        from unittest.mock import AsyncMock
+        mock_response = mocker.MagicMock()
+        mock_response.choices = [mocker.MagicMock(message=mocker.MagicMock(content="ok"))]
+        
+        # Utiliser AsyncMock pour les méthodes async
+        orch.openai_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         # Act
         health = await orch.health_check()
 
         # Assert
-        assert health["status"] in ["healthy", "degraded", "unhealthy"]
+        assert health["status"] == "healthy"
         assert "components" in health
+        assert health["components"]["openai"] == "ok"
+        assert "stats" in health
 
     @pytest.mark.skip(reason="Nécessite clé API OpenAI réelle")
     async def test_full_workflow_generic(self, sample_processed_request):

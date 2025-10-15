@@ -70,11 +70,11 @@ check_prerequisites() {
     log_info "Initialisation de l'environnement Conda..."
     eval "$(conda shell.bash hook)"
     
-    # Activation de l'environnement finetune
-    log_info "Activation de l'environnement Conda 'finetune'..."
-    conda activate finetune || {
-        log_error "Impossible d'activer l'environnement conda 'finetune'"
-        log_info "Créez l'environnement avec : conda create -n finetune python=3.10"
+    # Activation de l'environnement grist
+    log_info "Activation de l'environnement Conda 'grist'..."
+    conda activate grist || {
+        log_error "Impossible d'activer l'environnement conda 'grist'"
+        log_info "Créez l'environnement avec : conda create -n grist python=3.10"
         exit 1
     }
     
@@ -84,7 +84,7 @@ check_prerequisites() {
         exit 1
     fi
     
-    log_success "Prérequis vérifiés (environnement conda 'finetune' activé)"
+    log_success "Prérequis vérifiés (environnement conda 'grist' activé)"
 }
 
 # Fonction pour démarrer l'API
@@ -113,7 +113,7 @@ start_api() {
 
     # S'assurer que l'environnement conda est activé
     eval "$(conda shell.bash hook)"
-    conda activate finetune
+    conda activate grist
 
     # Commande de base avec variables d'environnement
     local cmd="python -m app.main"
@@ -174,7 +174,7 @@ debug_api() {
 
     # S'assurer que l'environnement conda est activé
     eval "$(conda shell.bash hook)"
-    conda activate finetune
+    conda activate grist
 
     # Commande de base
     local cmd="python -m app.main"

@@ -1,9 +1,27 @@
+# ========== API Framework ==========
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-pydantic==2.5.0
+pydantic>=2.10.0  # Compatible avec Python 3.13
+
+# ========== AI / OpenAI ==========
 openai==1.3.7
+
+# ========== HTTP Clients ==========
 httpx==0.25.2
-python-dotenv==1.0.0
-structlog==23.2.0
 requests==2.31.0
+
+# ========== Configuration ==========
+python-dotenv==1.0.0
+
+# ========== Logging ==========
+structlog==23.2.0
+
+# ========== Testing ==========
 pytest==8.0.0
+pytest-cov==4.1.0
+pytest-asyncio==0.23.3
+pytest-mock==3.12.0
+
+# ========== Optional Testing Tools (décommenter si besoin) ==========
+# pytest-xdist==3.5.0        # Parallélisation des tests
+# pytest-randomly==3.15.0     # Ordre aléatoire des tests

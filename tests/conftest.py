@@ -112,7 +112,7 @@ def sample_sql_query():
 @pytest.fixture
 def mock_openai_client():
     """Mock du client OpenAI"""
-    mock_client = AsyncMock(spec=openai.AsyncOpenAI)
+    mock_client = MagicMock(spec=openai.AsyncOpenAI)
 
     # Mock de la réponse chat.completions.create
     mock_response = MagicMock()
@@ -120,6 +120,9 @@ def mock_openai_client():
         MagicMock(message=MagicMock(content="Réponse simulée de l'IA"))
     ]
 
+    # Créer la structure hiérarchique chat.completions.create
+    mock_client.chat = MagicMock()
+    mock_client.chat.completions = MagicMock()
     mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
     return mock_client
