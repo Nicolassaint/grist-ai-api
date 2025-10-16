@@ -129,6 +129,55 @@ class TestPipelineFallback:
         # Analysis Agent ne devrait PAS être appelé (early termination)
         mock_analysis_agent.process_message.assert_not_called()
 
+    async def test_data_query_plan_continues_to_analysis(
+        self,
+        mock_sql_agent,
+        mock_generic_agent,
+        mock_analysis_agent,
+        mock_execution_context
+    ):
+        """Test: Plan data_query - SQL réussit puis Analysis s'exécute"""
+        # Arrange
+        agents = {
+            AgentType.SQL: mock_sql_agent,
+            AgentType.GENERIC: mock_generic_agent,
+            AgentType.ANALYSIS: mock_analysis_agent,
+        }
+        pipeline = PipelineExecutor(agents)
+        
+        # Plan data_query typique avec SQL + Analysis
+        plan = ExecutionPlan(
+            name="data_query",
+            agents=[AgentType.SQL, AgentType.ANALYSIS],
+            description="Data query with analysis",
+            requires_api_key=True
+        )
+        
+        # Mock SQL réussit et set les résultats dans le contexte
+        def sql_success_side_effect(context):
+            context.sql_query = "SELECT * FROM users"
+            context.sql_results = {"success": True, "data": [{"id": 1, "name": "test"}]}
+            context.data_analyzed = True
+            return "Résultats SQL trouvés"
+        
+        mock_sql_agent.process_message.side_effect = sql_success_side_effect
+        mock_analysis_agent.process_message.return_value = "Analyse des résultats: 1 utilisateur trouvé"
+
+        # Act
+        response = await pipeline.execute(plan, mock_execution_context)
+
+        # Assert
+        assert response.agent_used == "analysis"  # Analysis agent a la réponse finale
+        assert "Analyse des résultats" in response.response
+        
+        # Les deux agents doivent être appelés
+        mock_sql_agent.process_message.assert_called_once()
+        mock_analysis_agent.process_message.assert_called_once()
+        
+        # Le contexte doit avoir les données SQL
+        assert mock_execution_context.sql_query == "SELECT * FROM users"
+        assert mock_execution_context.sql_results is not None
+
     async def test_missing_api_key_error(
         self,
         pipeline_executor,

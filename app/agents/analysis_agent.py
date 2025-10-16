@@ -36,58 +36,47 @@ Exemple de format attendu:
 "La moyenne d'âge est de 35 ans, ce qui indique une population majoritairement adulte en milieu de carrière."
 """
 
-    async def process_message(
-        self,
-        user_message: str,
-        conversation_history: ConversationHistory,
-        sql_query: str,
-        sql_results: Dict[str, Any],
-        request_id: str,
-    ) -> str:
+    async def process_message(self, context) -> str:
         """
         Traite un message nécessitant une analyse de données
 
         Args:
-            user_message: Question de l'utilisateur
-            conversation_history: Historique de la conversation
-            sql_query: Requête SQL qui a été exécutée
-            sql_results: Résultats de la requête SQL
-            request_id: ID de la requête pour le logging
+            context: ExecutionContext contenant toutes les données nécessaires
 
         Returns:
             str: Réponse d'analyse
         """
         start_time = time.time()
 
-        self.logger.log_agent_start(request_id, user_message)
+        self.logger.log_agent_start(context.request_id, context.user_message)
 
         try:
             # Formatage des données pour l'analyse
-            formatted_results = self._format_data_for_analysis(sql_results)
-            numeric_summary = self._generate_numeric_summary(sql_results)
+            formatted_results = self._format_data_for_analysis(context.sql_results)
+            numeric_summary = self._generate_numeric_summary(context.sql_results)
 
             # Gestion intelligente des données vides vs erreurs
-            if not sql_results.get("success"):
+            if not context.sql_results.get("success"):
                 # Vraie erreur SQL - fallback simple
-                error_msg = sql_results.get("error", "Erreur SQL inconnue")
+                error_msg = context.sql_results.get("error", "Erreur SQL inconnue")
                 return f"Aucune donnée trouvée pour cette requête. Erreur: {error_msg}"
-            elif not sql_results.get("data") or len(sql_results["data"]) == 0:
+            elif not context.sql_results.get("data") or len(context.sql_results["data"]) == 0:
                 # Requête réussie mais sans données - cas normal
-                return self._handle_empty_results(user_message, sql_query)
+                return self._handle_empty_results(context.user_message, context.sql_query)
 
             # Génération de l'analyse via IA avec des données disponibles
             analysis_response = await self._generate_analysis(
-                user_message,
-                conversation_history,
-                sql_query,
+                context.user_message,
+                context.conversation_history,
+                context.sql_query,
                 formatted_results,
                 numeric_summary,
-                request_id,
+                context.request_id,
             )
 
             execution_time = time.time() - start_time
             self.logger.log_agent_response(
-                request_id, analysis_response, execution_time
+                context.request_id, analysis_response, execution_time
             )
 
             return analysis_response
@@ -96,10 +85,10 @@ Exemple de format attendu:
             execution_time = time.time() - start_time
             self.logger.error(
                 f"Erreur lors de l'analyse: {str(e)}",
-                request_id=request_id,
+                request_id=context.request_id,
                 execution_time=execution_time,
             )
-            return self._get_fallback_analysis(user_message, sql_results)
+            return self._get_fallback_analysis(context.user_message, context.sql_results)
 
     async def _generate_analysis(
         self,

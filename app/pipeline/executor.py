@@ -103,8 +103,8 @@ class PipelineExecutor:
             try:
                 await self._execute_agent(agent_type, context)
                 
-                # Si on a une réponse, on peut s'arrêter (fallback géré)
-                if context.response_text:
+                # Si on a une réponse et qu'elle vient du Generic Agent (fallback), on s'arrête
+                if context.response_text and context.agent_used == "generic":
                     break
                     
             except Exception as e:
@@ -231,16 +231,7 @@ class PipelineExecutor:
             )
             return
 
-        # Passer un historique pré-filtré à l'agent avec config spécifique ANALYSIS
-        filtered_history = self._get_filtered_history(context, ConfigAgentType.ANALYSIS)
-
-        response = await agent.process_message(
-            context.user_message,
-            filtered_history,
-            context.sql_query,
-            context.sql_results,
-            context.request_id,
-        )
+        response = await agent.process_message(context)
 
         context.analysis = response
         context.set_response(response, "analysis")

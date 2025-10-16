@@ -226,7 +226,7 @@ class TestGenericAgentConfiguration:
         assert "assistant IA" in agent.system_prompt
         assert "données" in agent.system_prompt
         assert "amical" in agent.system_prompt
-        assert "150 mots" in agent.system_prompt
+        assert "précis et détaillé" in agent.system_prompt
 
 
 @pytest.mark.unit

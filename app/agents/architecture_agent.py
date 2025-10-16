@@ -253,6 +253,7 @@ QUESTION: {user_question}
 
 FORMAT DE RÉPONSE:
 - Un conseil par ligne, commence par un tiret "-"
+- Limite toi à 10 conseils au maximum
 - Maximum 1-2 phrases par conseil
 - Sois concis, clair et bienveillant
 
@@ -276,7 +277,7 @@ Voici mes recommandations pour améliorer votre structure de données :
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=500,
-                temperature=0.3,
+                temperature=0.2,
             )
 
             recommendations_text = response.choices[0].message.content.strip()

@@ -1,5 +1,5 @@
 import openai
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional
 from ..models.message import Message, ConversationHistory
 from ..utils.logging import AgentLogger
 from ..utils.conversation_formatter import (
@@ -68,57 +68,36 @@ SELECT ...
 
 Explication : Cette requête récupère..."""
 
-    async def process_message(
-        self,
-        user_message: str,
-        conversation_history: ConversationHistory,
-        document_id: str,
-        grist_api_key: str,
-        request_id: str,
-    ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
+    async def process_message(self, context) -> Optional[str]:
         """
         Traite un message nécessitant une requête SQL
-
+        
         Returns:
-            tuple: (response_text, sql_query, sql_results)
+            Optional[str]: response_text si succès, None si erreur (fallback vers Generic)
         """
         start_time = time.time()
-
-        self.logger.log_agent_start("sql", user_message[:80])
-
+        
+        self.logger.log_agent_start("sql", context.user_message[:80])
+        
         try:
             # 1. Récupération des schémas
-            schemas = await self.schema_fetcher.get_all_schemas(document_id, request_id)
-
+            schemas = await self.schema_fetcher.get_all_schemas(context.document_id, context.request_id)
+            
             if not schemas:
-                return (
-                    (
-                        "Désolé, je ne peux pas accéder aux schémas de données de ce document. "
-                        "Vérifiez que le document existe et que vous avez les permissions appropriées."
-                    ),
-                    None,
-                    None,
-                )
-
+                context.set_error("Impossible d'accéder aux schémas de données. Vérifiez vos permissions.", "sql")
+                return None  # Fallback vers Generic
+            
             # 2. Récupération des échantillons de données
             data_samples = await self.sample_fetcher.fetch_all_samples(
-                document_id, schemas, grist_api_key, limit=5, request_id=request_id
+                context.document_id, schemas, context.grist_api_key, limit=5, request_id=context.request_id
             )
-
+            
             # 3. Génération de la requête SQL
-            sql_query = await self._generate_sql_query(
-                user_message, conversation_history, schemas, data_samples, request_id
-            )
-
+            sql_query = await self._generate_sql_query(context.user_message, context.conversation_history, schemas, data_samples, context.request_id)
+            
             if not sql_query:
-                return (
-                    (
-                        "Je n'ai pas pu générer une requête SQL appropriée pour votre question. "
-                        "Pouvez-vous la reformuler ou être plus spécifique ?"
-                    ),
-                    None,
-                    None,
-                )
+                context.set_error("Impossible de générer une requête SQL appropriée pour cette question.", "sql")
+                return None  # Fallback vers Generic
 
             # 4. Exécution de la requête
             sql_results = await self.sql_runner.execute_sql(context.document_id, sql_query, context.request_id)

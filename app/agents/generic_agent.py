@@ -29,7 +29,7 @@ Contexte : L'utilisateur travaille avec un document Grist contenant des données
 
 Instructions :
 - Sois amical, utile et professionnel
-- Reste concis dans tes réponses (max 150 mots)
+- Sois précis et détaillé dans tes réponses quand nécessaire
 - Si l'utilisateur pose une question sur des données spécifiques, suggère-lui de reformuler pour une analyse de données
 - N'invente jamais de données ou d'informations spécifiques au document de l'utilisateur
 
@@ -139,13 +139,13 @@ Je suis là pour vous aider avec Grist !"""
         self.logger.log_ai_request(
             model=self.model,
             messages_count=len(messages),
-            max_tokens=200,
+            max_tokens=800,
             request_id=context.request_id,
             prompt_preview=prompt_text,
         )
 
         response = await self.client.chat.completions.create(
-            model=self.model, messages=messages, max_tokens=200, temperature=0.7
+            model=self.model, messages=messages, max_tokens=800, temperature=0.7
         )
 
         ai_response = response.choices[0].message.content.strip()
