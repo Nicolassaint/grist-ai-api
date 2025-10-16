@@ -208,11 +208,11 @@ Réponds UNIQUEMENT par le nom du plan: generic, data_query, ou architecture_rev
             {"role": "system", "content": self.routing_prompt}
         ]
 
-        # Ajout du contexte conversationnel (3 derniers messages)
-        recent_messages = conversation_history.get_recent_messages(3)
-        if len(recent_messages) > 1:
+        # Ajout du contexte conversationnel (déjà filtré par la configuration centralisée)
+        # Plus besoin d'appeler get_recent_messages car le filtrage est fait en amont
+        if len(conversation_history.messages) > 0:
             context = "Contexte récent:\n"
-            for msg in recent_messages[:-1]:  # Exclure le message actuel
+            for msg in conversation_history.messages:
                 context += f"- {msg.role}: {msg.content[:100]}\n"
             messages.append({"role": "system", "content": context})
 

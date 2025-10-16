@@ -59,6 +59,7 @@ from typing import Dict, Any
 from .models.request import ProcessedRequest, ChatResponse
 from .models.message import ConversationHistory
 from .utils.logging import AgentLogger
+from .config.history_config import HistoryConfig
 
 # Agents
 from .agents.router_agent import RouterAgent
@@ -123,6 +124,14 @@ class AIOrchestrator:
         # Modèles
         self.default_model = os.getenv("DEFAULT_MODEL", "mistral-small")
         self.analysis_model = os.getenv("ANALYSIS_MODEL", "mistral-small")
+
+        # Configuration de l'historique conversationnel
+        self.history_config = HistoryConfig.from_env()
+        self.logger.info(
+            "Configuration d'historique chargée",
+            enabled=self.history_config.enabled,
+            max_messages=self.history_config.max_messages
+        )
 
         # Initialisation des agents
         self._initialize_agents()
@@ -268,9 +277,15 @@ class AIOrchestrator:
                 )
 
             # 2. Router → Choisir le plan d'exécution
+            # Créer un historique filtré pour le router selon la config
+            from .config.history_config import get_agent_config, ConfigAgentType
+            router_config = get_agent_config(self.history_config, ConfigAgentType.ROUTER)
+            filtered_messages = router_config.filter_history(conversation_history, exclude_last=True)
+            filtered_history = ConversationHistory(messages=filtered_messages)
+
             plan = await self.router.route_to_plan(
                 user_message.content,
-                conversation_history,
+                filtered_history,
                 request_id
             )
 
@@ -289,7 +304,8 @@ class AIOrchestrator:
                 conversation_history=conversation_history,
                 document_id=request.document_id,
                 grist_api_key=request.grist_api_key,
-                request_id=request_id
+                request_id=request_id,
+                history_config=self.history_config
             )
 
             # 4. Préparer les agents (avec Grist si nécessaire)

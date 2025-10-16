@@ -44,10 +44,10 @@ Exemples de réponses appropriées :
         try:
             # Construction du contexte conversationnel
             messages = [{"role": "system", "content": self.system_prompt}]
-            
-            # Ajout de l'historique récent
-            recent_messages = conversation_history.get_recent_messages(5)
-            for msg in recent_messages:
+
+            # Ajout de l'historique (déjà filtré par la configuration centralisée)
+            # Plus besoin d'appeler get_recent_messages car le filtrage est fait en amont
+            for msg in conversation_history.messages:
                 messages.append({
                     "role": msg.role.value,
                     "content": msg.content

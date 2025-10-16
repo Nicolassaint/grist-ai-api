@@ -13,8 +13,9 @@ Exemple de flux:
 
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
-from ..models.message import ConversationHistory
+from ..models.message import ConversationHistory, Message
 from ..models.architecture import ArchitectureAnalysis
+from ..config.history_config import HistoryConfig, default_history_config
 
 
 @dataclass
@@ -49,6 +50,7 @@ class ExecutionContext:
     document_id: str
     grist_api_key: Optional[str]
     request_id: str
+    history_config: HistoryConfig = field(default_factory=lambda: default_history_config)
 
     # Résultats intermédiaires (enrichis par les agents)
     schemas: Optional[Dict[str, Any]] = None
@@ -119,3 +121,72 @@ class ExecutionContext:
         self.error = error_message
         self.agent_used = agent_name
         self.add_trace(agent_name, f"Error: {error_message}")
+
+    def get_filtered_history(self, exclude_last: bool = None) -> List[Message]:
+        """
+        Retourne l'historique filtré selon la configuration.
+
+        Cette méthode est un helper pour les agents, qui peuvent simplement
+        appeler context.get_filtered_history() au lieu de gérer manuellement
+        la configuration d'historique.
+
+        Args:
+            exclude_last: Override pour exclure le dernier message (optionnel)
+
+        Returns:
+            Liste de messages filtrés selon history_config
+
+        Exemple:
+            >>> # Dans un agent
+            >>> filtered_messages = context.get_filtered_history()
+            >>> for msg in filtered_messages:
+            ...     messages.append({"role": msg.role.value, "content": msg.content})
+        """
+        return self.history_config.filter_history(
+            self.conversation_history,
+            exclude_last=exclude_last
+        )
+
+    def format_history_for_prompt(self, exclude_last: bool = None) -> List[dict]:
+        """
+        Formate l'historique pour injection directe dans un prompt LLM.
+
+        Args:
+            exclude_last: Override pour exclure le dernier message (optionnel)
+
+        Returns:
+            Liste de dictionnaires au format {"role": "...", "content": "..."}
+
+        Exemple:
+            >>> # Dans un agent
+            >>> messages = [
+            ...     {"role": "system", "content": system_prompt},
+            ...     *context.format_history_for_prompt(),
+            ...     {"role": "user", "content": context.user_message}
+            ... ]
+            >>> response = await client.chat.completions.create(model="gpt-4", messages=messages)
+        """
+        return self.history_config.format_for_prompt(
+            self.conversation_history,
+            exclude_last=exclude_last
+        )
+
+    def format_history_as_context(self, max_chars_per_message: Optional[int] = None) -> str:
+        """
+        Formate l'historique en chaîne de caractères pour contexte textuel.
+
+        Args:
+            max_chars_per_message: Limite de caractères par message (optionnel)
+
+        Returns:
+            Chaîne formatée du contexte conversationnel
+
+        Exemple:
+            >>> # Dans un agent
+            >>> context_string = context.format_history_as_context(max_chars_per_message=100)
+            >>> prompt = f"Schémas: {schemas}\n\n{context_string}\n\nQuestion: {context.user_message}"
+        """
+        return self.history_config.format_as_context_string(
+            self.conversation_history,
+            max_chars_per_message=max_chars_per_message
+        )

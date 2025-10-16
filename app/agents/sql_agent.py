@@ -103,10 +103,10 @@ Explication : Cette requête récupère..."""
         
         # Formatage des schémas pour le prompt
         schemas_text = self.schema_fetcher.format_schema_for_prompt(schemas)
-        
-        # Contexte conversationnel
-        recent_messages = conversation_history.get_recent_messages(3)
-        context = "\n".join([f"{msg.role}: {msg.content}" for msg in recent_messages[:-1]])
+
+        # Contexte conversationnel (déjà filtré par la configuration centralisée)
+        # Plus besoin d'appeler get_recent_messages car le filtrage est fait en amont
+        context = "\n".join([f"{msg.role}: {msg.content}" for msg in conversation_history.messages])
         
         # Construction du prompt
         prompt = self.sql_prompt_template.format(

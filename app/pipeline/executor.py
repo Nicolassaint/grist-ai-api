@@ -24,11 +24,13 @@ Gestion d'erreurs:
     - La réponse finale inclut les erreurs rencontrées
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import time
 from .context import ExecutionContext
 from .plans import ExecutionPlan, AgentType
 from ..models.request import ChatResponse
+from ..models.message import ConversationHistory
+from ..config.history_config import get_agent_config, AgentType as ConfigAgentType
 from ..utils.logging import AgentLogger
 
 
@@ -163,20 +165,59 @@ class PipelineExecutor:
         elif agent_type == AgentType.ARCHITECTURE:
             await self._execute_architecture_agent(agent, context)
 
+    def _get_filtered_history(
+        self,
+        context: ExecutionContext,
+        agent_type: Optional[ConfigAgentType] = None
+    ) -> ConversationHistory:
+        """
+        Crée un ConversationHistory filtré selon la configuration.
+
+        Au lieu de passer l'historique complet aux agents, on leur passe
+        un historique pré-filtré selon la configuration. Les agents n'ont
+        plus besoin de gérer le filtrage eux-mêmes.
+
+        Si agent_type est fourni, utilise la configuration spécifique pour cet agent.
+
+        Args:
+            context: Contexte d'exécution contenant history_config
+            agent_type: Type d'agent pour config spécifique (optionnel)
+
+        Returns:
+            Nouveau ConversationHistory avec messages filtrés
+        """
+        # Obtenir la config spécifique à l'agent si fournie
+        if agent_type:
+            agent_config = get_agent_config(context.history_config, agent_type)
+            filtered_messages = agent_config.filter_history(
+                context.conversation_history,
+                exclude_last=True
+            )
+        else:
+            filtered_messages = context.get_filtered_history(exclude_last=True)
+
+        return ConversationHistory(messages=filtered_messages)
+
     async def _execute_generic_agent(self, agent, context: ExecutionContext):
         """Exécute l'agent générique"""
+        # Passer un historique pré-filtré à l'agent avec config spécifique generic
+        filtered_history = self._get_filtered_history(context, ConfigAgentType.GENERIC)
+
         response = await agent.process_message(
             context.user_message,
-            context.conversation_history,
+            filtered_history,
             context.request_id
         )
         context.set_response(response, "generic")
 
     async def _execute_sql_agent(self, agent, context: ExecutionContext):
         """Exécute l'agent SQL"""
+        # Passer un historique pré-filtré à l'agent avec config spécifique SQL
+        filtered_history = self._get_filtered_history(context, ConfigAgentType.SQL)
+
         response, sql_query, sql_results = await agent.process_message(
             context.user_message,
-            context.conversation_history,
+            filtered_history,
             context.document_id,
             context.request_id
         )
@@ -203,9 +244,12 @@ class PipelineExecutor:
             )
             return
 
+        # Passer un historique pré-filtré à l'agent avec config spécifique ANALYSIS
+        filtered_history = self._get_filtered_history(context, ConfigAgentType.ANALYSIS)
+
         response = await agent.process_message(
             context.user_message,
-            context.conversation_history,
+            filtered_history,
             context.sql_query,
             context.sql_results,
             context.request_id
