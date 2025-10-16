@@ -22,20 +22,20 @@ class TestGenericAgent:
         generic_agent,
         sample_conversation_history,
         sample_request_id,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Traitement réussi d'un message"""
         # Arrange
         user_message = "Bonjour, comment ça va ?"
         mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content="Bonjour! Je vais bien, merci."))]
+        mock_response.choices = [
+            Mock(message=Mock(content="Bonjour! Je vais bien, merci."))
+        ]
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         # Act
         result = await generic_agent.process_message(
-            user_message,
-            sample_conversation_history,
-            sample_request_id
+            user_message, sample_conversation_history, sample_request_id
         )
 
         # Assert
@@ -44,28 +44,31 @@ class TestGenericAgent:
         mock_openai_client.chat.completions.create.assert_called_once()
 
     async def test_process_message_with_conversation_context(
-        self,
-        generic_agent,
-        sample_request_id,
-        mock_openai_client
+        self, generic_agent, sample_request_id, mock_openai_client
     ):
         """Test: Message avec contexte conversationnel"""
         # Arrange
-        conversation = ConversationHistory(messages=[
-            Message(role="user", content="Bonjour"),
-            Message(role="assistant", content="Bonjour! Comment puis-je vous aider?"),
-            Message(role="user", content="Parle-moi de Grist"),
-        ])
+        conversation = ConversationHistory(
+            messages=[
+                Message(role="user", content="Bonjour"),
+                Message(
+                    role="assistant", content="Bonjour! Comment puis-je vous aider?"
+                ),
+                Message(role="user", content="Parle-moi de Grist"),
+            ]
+        )
 
         mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content="Grist est une plateforme de gestion de données."))]
+        mock_response.choices = [
+            Mock(
+                message=Mock(content="Grist est une plateforme de gestion de données.")
+            )
+        ]
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         # Act
         result = await generic_agent.process_message(
-            "Parle-moi de Grist",
-            conversation,
-            sample_request_id
+            "Parle-moi de Grist", conversation, sample_request_id
         )
 
         # Assert
@@ -78,16 +81,12 @@ class TestGenericAgent:
         assert len(messages) >= 4  # system + 3 messages de conversation
 
     async def test_process_message_limits_recent_messages(
-        self,
-        generic_agent,
-        sample_request_id,
-        mock_openai_client
+        self, generic_agent, sample_request_id, mock_openai_client
     ):
         """Test: Limite à 5 messages récents"""
         # Arrange
         many_messages = [
-            Message(role="user", content=f"Message {i}")
-            for i in range(10)
+            Message(role="user", content=f"Message {i}") for i in range(10)
         ]
         conversation = ConversationHistory(messages=many_messages)
 
@@ -96,11 +95,7 @@ class TestGenericAgent:
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         # Act
-        await generic_agent.process_message(
-            "Test",
-            conversation,
-            sample_request_id
-        )
+        await generic_agent.process_message("Test", conversation, sample_request_id)
 
         # Assert
         call_args = mock_openai_client.chat.completions.create.call_args
@@ -113,7 +108,7 @@ class TestGenericAgent:
         generic_agent,
         sample_conversation_history,
         sample_request_id,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Erreur API OpenAI -> fallback"""
         # Arrange
@@ -121,9 +116,7 @@ class TestGenericAgent:
 
         # Act
         result = await generic_agent.process_message(
-            "Bonjour",
-            sample_conversation_history,
-            sample_request_id
+            "Bonjour", sample_conversation_history, sample_request_id
         )
 
         # Assert
@@ -131,23 +124,20 @@ class TestGenericAgent:
         assert "Bonjour" in result  # Fallback pour salutation
 
     async def test_process_message_empty_conversation(
-        self,
-        generic_agent,
-        sample_request_id,
-        mock_openai_client
+        self, generic_agent, sample_request_id, mock_openai_client
     ):
         """Test: Conversation vide"""
         # Arrange
         empty_conversation = ConversationHistory(messages=[])
         mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content="Comment puis-je vous aider?"))]
+        mock_response.choices = [
+            Mock(message=Mock(content="Comment puis-je vous aider?"))
+        ]
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         # Act
         result = await generic_agent.process_message(
-            "Première question",
-            empty_conversation,
-            sample_request_id
+            "Première question", empty_conversation, sample_request_id
         )
 
         # Assert
@@ -226,12 +216,15 @@ class TestGenericAgent:
         assert "moyenne" in result
         assert "données Grist" in result
 
-    @pytest.mark.parametrize("user_message,expected_keyword", [
-        ("bonjour", "Bonjour"),
-        ("aide", "analyser"),
-        ("c'est quoi", "assistant"),
-        ("random text", "Désolé"),
-    ])
+    @pytest.mark.parametrize(
+        "user_message,expected_keyword",
+        [
+            ("bonjour", "Bonjour"),
+            ("aide", "analyser"),
+            ("c'est quoi", "assistant"),
+            ("random text", "Désolé"),
+        ],
+    )
     def test_fallback_parametrized(self, generic_agent, user_message, expected_keyword):
         """Test: Fallback paramétrés"""
         result = generic_agent._get_fallback_response(user_message)
@@ -321,7 +314,7 @@ class TestGenericAgentEdgeCases:
         generic_agent,
         sample_conversation_history,
         sample_request_id,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Les espaces en trop sont supprimés"""
         mock_response = Mock()
@@ -329,9 +322,7 @@ class TestGenericAgentEdgeCases:
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         result = await generic_agent.process_message(
-            "Test",
-            sample_conversation_history,
-            sample_request_id
+            "Test", sample_conversation_history, sample_request_id
         )
 
         assert result == "Réponse avec espaces"

@@ -20,7 +20,7 @@ class TestSQLAgent:
             mock_openai_client,
             mock_schema_fetcher,
             mock_sql_runner,
-            model="gpt-3.5-turbo"
+            model="gpt-3.5-turbo",
         )
 
     async def test_process_message_success(
@@ -35,12 +35,14 @@ class TestSQLAgent:
         sample_sql_results,
         mock_openai_client,
         mock_schema_fetcher,
-        mock_sql_runner
+        mock_sql_runner,
     ):
         """Test: Traitement réussi d'un message"""
         # Arrange
         mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content=f"```sql\n{sample_sql_query}\n```"))]
+        mock_response.choices = [
+            Mock(message=Mock(content=f"```sql\n{sample_sql_query}\n```"))
+        ]
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         mock_schema_fetcher.get_all_schemas.return_value = sample_schemas
@@ -51,7 +53,7 @@ class TestSQLAgent:
             sample_user_message,
             sample_conversation_history,
             sample_document_id,
-            sample_request_id
+            sample_request_id,
         )
 
         # Assert
@@ -69,7 +71,7 @@ class TestSQLAgent:
         sample_conversation_history,
         sample_document_id,
         sample_request_id,
-        mock_schema_fetcher
+        mock_schema_fetcher,
     ):
         """Test: Pas de schémas disponibles"""
         # Arrange
@@ -80,7 +82,7 @@ class TestSQLAgent:
             sample_user_message,
             sample_conversation_history,
             sample_document_id,
-            sample_request_id
+            sample_request_id,
         )
 
         # Assert
@@ -97,12 +99,14 @@ class TestSQLAgent:
         sample_request_id,
         sample_schemas,
         mock_openai_client,
-        mock_schema_fetcher
+        mock_schema_fetcher,
     ):
         """Test: Échec de génération SQL"""
         # Arrange
         mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content="Je ne peux pas générer de SQL"))]
+        mock_response.choices = [
+            Mock(message=Mock(content="Je ne peux pas générer de SQL"))
+        ]
         mock_openai_client.chat.completions.create.return_value = mock_response
         mock_schema_fetcher.get_all_schemas.return_value = sample_schemas
 
@@ -111,7 +115,7 @@ class TestSQLAgent:
             sample_user_message,
             sample_conversation_history,
             sample_document_id,
-            sample_request_id
+            sample_request_id,
         )
 
         # Assert
@@ -130,18 +134,20 @@ class TestSQLAgent:
         sample_sql_query,
         mock_openai_client,
         mock_schema_fetcher,
-        mock_sql_runner
+        mock_sql_runner,
     ):
         """Test: Erreur d'exécution SQL"""
         # Arrange
         mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content=f"```sql\n{sample_sql_query}\n```"))]
+        mock_response.choices = [
+            Mock(message=Mock(content=f"```sql\n{sample_sql_query}\n```"))
+        ]
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         mock_schema_fetcher.get_all_schemas.return_value = sample_schemas
         mock_sql_runner.execute_sql.return_value = {
             "success": False,
-            "error": "Invalid SQL syntax"
+            "error": "Invalid SQL syntax",
         }
 
         # Act
@@ -149,7 +155,7 @@ class TestSQLAgent:
             sample_user_message,
             sample_conversation_history,
             sample_document_id,
-            sample_request_id
+            sample_request_id,
         )
 
         # Assert
@@ -168,12 +174,14 @@ class TestSQLAgent:
         sample_sql_query,
         mock_openai_client,
         mock_schema_fetcher,
-        mock_sql_runner
+        mock_sql_runner,
     ):
         """Test: Requête SQL retourne 0 résultats"""
         # Arrange
         mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content=f"```sql\n{sample_sql_query}\n```"))]
+        mock_response.choices = [
+            Mock(message=Mock(content=f"```sql\n{sample_sql_query}\n```"))
+        ]
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         mock_schema_fetcher.get_all_schemas.return_value = sample_schemas
@@ -181,7 +189,7 @@ class TestSQLAgent:
             "success": True,
             "data": [],
             "row_count": 0,
-            "columns": []
+            "columns": [],
         }
 
         # Act
@@ -189,7 +197,7 @@ class TestSQLAgent:
             sample_user_message,
             sample_conversation_history,
             sample_document_id,
-            sample_request_id
+            sample_request_id,
         )
 
         # Assert
@@ -206,12 +214,18 @@ class TestSQLAgent:
         sample_schemas,
         sample_request_id,
         sample_sql_query,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Génération SQL réussie"""
         # Arrange
         mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content=f"```sql\n{sample_sql_query}\n```\nExplication: Test"))]
+        mock_response.choices = [
+            Mock(
+                message=Mock(
+                    content=f"```sql\n{sample_sql_query}\n```\nExplication: Test"
+                )
+            )
+        ]
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         # Act
@@ -219,7 +233,7 @@ class TestSQLAgent:
             sample_user_message,
             sample_conversation_history,
             sample_schemas,
-            sample_request_id
+            sample_request_id,
         )
 
         # Assert
@@ -232,26 +246,27 @@ class TestSQLAgent:
         sample_request_id,
         sample_schemas,
         sample_sql_query,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Génération SQL avec contexte conversationnel"""
         # Arrange
-        conversation = ConversationHistory(messages=[
-            Message(role="user", content="Bonjour"),
-            Message(role="assistant", content="Bonjour!"),
-            Message(role="user", content="Montre les clients"),
-        ])
+        conversation = ConversationHistory(
+            messages=[
+                Message(role="user", content="Bonjour"),
+                Message(role="assistant", content="Bonjour!"),
+                Message(role="user", content="Montre les clients"),
+            ]
+        )
 
         mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content=f"```sql\n{sample_sql_query}\n```"))]
+        mock_response.choices = [
+            Mock(message=Mock(content=f"```sql\n{sample_sql_query}\n```"))
+        ]
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         # Act
         result = await sql_agent._generate_sql_query(
-            "Montre les clients",
-            conversation,
-            sample_schemas,
-            sample_request_id
+            "Montre les clients", conversation, sample_schemas, sample_request_id
         )
 
         # Assert
@@ -268,7 +283,7 @@ class TestSQLAgent:
         sample_conversation_history,
         sample_schemas,
         sample_request_id,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Erreur API OpenAI"""
         # Arrange
@@ -279,7 +294,7 @@ class TestSQLAgent:
             sample_user_message,
             sample_conversation_history,
             sample_schemas,
-            sample_request_id
+            sample_request_id,
         )
 
         # Assert
@@ -335,21 +350,17 @@ select name from users
         # Assert
         assert result == "select name from users"
 
-    def test_format_sql_response_success(self, sql_agent, sample_sql_query, mock_sql_runner):
+    def test_format_sql_response_success(
+        self, sql_agent, sample_sql_query, mock_sql_runner
+    ):
         """Test: Formatage réponse SQL réussie"""
         # Arrange
-        sql_results = {
-            "success": True,
-            "row_count": 5,
-            "data": [{"nom": "Test"}]
-        }
+        sql_results = {"success": True, "row_count": 5, "data": [{"nom": "Test"}]}
         mock_sql_runner.format_results_for_analysis.return_value = "Résultats formatés"
 
         # Act
         result = sql_agent._format_sql_response(
-            sample_sql_query,
-            sql_results,
-            "Test question"
+            sample_sql_query, sql_results, "Test question"
         )
 
         # Assert
@@ -361,16 +372,11 @@ select name from users
     def test_format_sql_response_error(self, sql_agent, sample_sql_query):
         """Test: Formatage réponse SQL avec erreur"""
         # Arrange
-        sql_results = {
-            "success": False,
-            "error": "Syntax error"
-        }
+        sql_results = {"success": False, "error": "Syntax error"}
 
         # Act
         result = sql_agent._format_sql_response(
-            sample_sql_query,
-            sql_results,
-            "Test question"
+            sample_sql_query, sql_results, "Test question"
         )
 
         # Assert
@@ -381,17 +387,11 @@ select name from users
     def test_format_sql_response_no_results(self, sql_agent, sample_sql_query):
         """Test: Formatage réponse SQL sans résultats"""
         # Arrange
-        sql_results = {
-            "success": True,
-            "row_count": 0,
-            "data": []
-        }
+        sql_results = {"success": True, "row_count": 0, "data": []}
 
         # Act
         result = sql_agent._format_sql_response(
-            sample_sql_query,
-            sql_results,
-            "Test question"
+            sample_sql_query, sql_results, "Test question"
         )
 
         # Assert
@@ -399,22 +399,16 @@ select name from users
         assert "Suggestions" in result
         assert sample_sql_query in result
 
-    def test_format_sql_response_single_row(self, sql_agent, sample_sql_query, mock_sql_runner):
+    def test_format_sql_response_single_row(
+        self, sql_agent, sample_sql_query, mock_sql_runner
+    ):
         """Test: Formatage avec 1 seul résultat (singulier)"""
         # Arrange
-        sql_results = {
-            "success": True,
-            "row_count": 1,
-            "data": [{"nom": "Test"}]
-        }
+        sql_results = {"success": True, "row_count": 1, "data": [{"nom": "Test"}]}
         mock_sql_runner.format_results_for_analysis.return_value = "1 résultat"
 
         # Act
-        result = sql_agent._format_sql_response(
-            sample_sql_query,
-            sql_results,
-            "Test"
-        )
+        result = sql_agent._format_sql_response(sample_sql_query, sql_results, "Test")
 
         # Assert
         assert "(1 ligne)" in result  # Singulier
@@ -431,13 +425,21 @@ select name from users
         assert "Commandes" in result
         assert "Exemple" in result
 
-    @pytest.mark.parametrize("sql_response,expected_extracted", [
-        ("```sql\nSELECT * FROM T\n```", "SELECT * FROM T"),
-        ("SELECT id FROM users WHERE active = 1", "SELECT id FROM users WHERE active = 1"),
-        ("Pas de SQL ici", None),
-        ("```SQL\nselect name\n```", "select name"),
-    ])
-    def test_extract_sql_parametrized(self, sql_agent, sql_response, expected_extracted):
+    @pytest.mark.parametrize(
+        "sql_response,expected_extracted",
+        [
+            ("```sql\nSELECT * FROM T\n```", "SELECT * FROM T"),
+            (
+                "SELECT id FROM users WHERE active = 1",
+                "SELECT id FROM users WHERE active = 1",
+            ),
+            ("Pas de SQL ici", None),
+            ("```SQL\nselect name\n```", "select name"),
+        ],
+    )
+    def test_extract_sql_parametrized(
+        self, sql_agent, sql_response, expected_extracted
+    ):
         """Test: Extraction SQL paramétrée"""
         result = sql_agent._extract_sql_from_response(sql_response)
         assert result == expected_extracted
@@ -454,7 +456,7 @@ class TestSQLAgentEdgeCases:
             mock_openai_client,
             mock_schema_fetcher,
             mock_sql_runner,
-            model="gpt-3.5-turbo"
+            model="gpt-3.5-turbo",
         )
 
     def test_extract_sql_multiline(self, sql_agent):
@@ -494,7 +496,7 @@ SELECT * FROM Table2
         sql_results = {
             "success": True,
             "row_count": 10000,
-            "data": [{"id": i} for i in range(10000)]
+            "data": [{"id": i} for i in range(10000)],
         }
         mock_sql_runner.format_results_for_analysis.return_value = "10000 résultats"
 

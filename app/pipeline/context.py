@@ -50,7 +50,9 @@ class ExecutionContext:
     document_id: str
     grist_api_key: Optional[str]
     request_id: str
-    history_config: HistoryConfig = field(default_factory=lambda: default_history_config)
+    history_config: HistoryConfig = field(
+        default_factory=lambda: default_history_config
+    )
 
     # Résultats intermédiaires (enrichis par les agents)
     schemas: Optional[Dict[str, Any]] = None
@@ -143,8 +145,7 @@ class ExecutionContext:
             ...     messages.append({"role": msg.role.value, "content": msg.content})
         """
         return self.history_config.filter_history(
-            self.conversation_history,
-            exclude_last=exclude_last
+            self.conversation_history, exclude_last=exclude_last
         )
 
     def format_history_for_prompt(self, exclude_last: bool = None) -> List[dict]:
@@ -167,11 +168,12 @@ class ExecutionContext:
             >>> response = await client.chat.completions.create(model="gpt-4", messages=messages)
         """
         return self.history_config.format_for_prompt(
-            self.conversation_history,
-            exclude_last=exclude_last
+            self.conversation_history, exclude_last=exclude_last
         )
 
-    def format_history_as_context(self, max_chars_per_message: Optional[int] = None) -> str:
+    def format_history_as_context(
+        self, max_chars_per_message: Optional[int] = None
+    ) -> str:
         """
         Formate l'historique en chaîne de caractères pour contexte textuel.
 
@@ -187,6 +189,5 @@ class ExecutionContext:
             >>> prompt = f"Schémas: {schemas}\n\n{context_string}\n\nQuestion: {context.user_message}"
         """
         return self.history_config.format_as_context_string(
-            self.conversation_history,
-            max_chars_per_message=max_chars_per_message
+            self.conversation_history, max_chars_per_message=max_chars_per_message
         )

@@ -65,9 +65,7 @@ class PipelineExecutor:
         self.logger = AgentLogger("pipeline_executor")
 
     async def execute(
-        self,
-        plan: ExecutionPlan,
-        context: ExecutionContext
+        self, plan: ExecutionPlan, context: ExecutionContext
     ) -> ChatResponse:
         """
         Exécute le pipeline d'agents défini par le plan.
@@ -90,14 +88,13 @@ class PipelineExecutor:
             f"🚀 Début exécution pipeline",
             request_id=context.request_id,
             plan_name=plan.name,
-            agents_count=len(plan.agents)
+            agents_count=len(plan.agents),
         )
 
         # Vérifications préalables
         if plan.requires_api_key and not context.grist_api_key:
             context.set_error(
-                "Cette opération nécessite une clé API Grist",
-                "pipeline_executor"
+                "Cette opération nécessite une clé API Grist", "pipeline_executor"
             )
             return self._build_response(context, plan, time.time() - start_time)
 
@@ -109,7 +106,7 @@ class PipelineExecutor:
                 self.logger.error(
                     f"Erreur lors de l'exécution de {agent_type.value}: {str(e)}",
                     request_id=context.request_id,
-                    agent_type=agent_type.value
+                    agent_type=agent_type.value,
                 )
                 # On continue avec les agents suivants même en cas d'erreur
                 context.add_trace(agent_type.value, f"Error: {str(e)}")
@@ -121,16 +118,12 @@ class PipelineExecutor:
             request_id=context.request_id,
             plan_name=plan.name,
             execution_time=f"{execution_time:.2f}s",
-            agents_executed=len(context.execution_trace)
+            agents_executed=len(context.execution_trace),
         )
 
         return self._build_response(context, plan, execution_time)
 
-    async def _execute_agent(
-        self,
-        agent_type: AgentType,
-        context: ExecutionContext
-    ):
+    async def _execute_agent(self, agent_type: AgentType, context: ExecutionContext):
         """
         Exécute un agent spécifique et enrichit le contexte.
 
@@ -141,15 +134,14 @@ class PipelineExecutor:
         if agent_type not in self.agents:
             self.logger.warning(
                 f"Agent {agent_type.value} non disponible",
-                request_id=context.request_id
+                request_id=context.request_id,
             )
             return
 
         agent = self.agents[agent_type]
 
         self.logger.info(
-            f"▶️  Exécution agent {agent_type.value}",
-            request_id=context.request_id
+            f"▶️  Exécution agent {agent_type.value}", request_id=context.request_id
         )
 
         # Exécution selon le type d'agent
@@ -166,9 +158,7 @@ class PipelineExecutor:
             await self._execute_architecture_agent(agent, context)
 
     def _get_filtered_history(
-        self,
-        context: ExecutionContext,
-        agent_type: Optional[ConfigAgentType] = None
+        self, context: ExecutionContext, agent_type: Optional[ConfigAgentType] = None
     ) -> ConversationHistory:
         """
         Crée un ConversationHistory filtré selon la configuration.
@@ -190,8 +180,7 @@ class PipelineExecutor:
         if agent_type:
             agent_config = get_agent_config(context.history_config, agent_type)
             filtered_messages = agent_config.filter_history(
-                context.conversation_history,
-                exclude_last=True
+                context.conversation_history, exclude_last=True
             )
         else:
             filtered_messages = context.get_filtered_history(exclude_last=True)
@@ -204,9 +193,7 @@ class PipelineExecutor:
         filtered_history = self._get_filtered_history(context, ConfigAgentType.GENERIC)
 
         response = await agent.process_message(
-            context.user_message,
-            filtered_history,
-            context.request_id
+            context.user_message, filtered_history, context.request_id
         )
         context.set_response(response, "generic")
 
@@ -219,7 +206,8 @@ class PipelineExecutor:
             context.user_message,
             filtered_history,
             context.document_id,
-            context.request_id
+            context.grist_api_key,
+            context.request_id,
         )
 
         # Enrichir le contexte
@@ -232,7 +220,10 @@ class PipelineExecutor:
         if not context.has("analysis"):
             context.set_response(response, "sql")
 
-        context.add_trace("sql", f"Executed query, got {sql_results.get('row_count', 0) if sql_results else 0} rows")
+        context.add_trace(
+            "sql",
+            f"Executed query, got {sql_results.get('row_count', 0) if sql_results else 0} rows",
+        )
 
     async def _execute_analysis_agent(self, agent, context: ExecutionContext):
         """Exécute l'agent d'analyse"""
@@ -240,7 +231,7 @@ class PipelineExecutor:
         if not context.has("sql_results"):
             self.logger.warning(
                 "Analysis agent nécessite des résultats SQL",
-                request_id=context.request_id
+                request_id=context.request_id,
             )
             return
 
@@ -252,7 +243,7 @@ class PipelineExecutor:
             filtered_history,
             context.sql_query,
             context.sql_results,
-            context.request_id
+            context.request_id,
         )
 
         context.analysis = response
@@ -261,10 +252,17 @@ class PipelineExecutor:
 
     async def _execute_architecture_agent(self, agent, context: ExecutionContext):
         """Exécute l'agent d'architecture"""
+        # Passer un historique pré-filtré à l'agent avec config spécifique ARCHITECTURE
+        filtered_history = self._get_filtered_history(
+            context, ConfigAgentType.ARCHITECTURE
+        )
+
         analysis = await agent.analyze_document_structure(
             context.document_id,
             context.user_message,
-            context.request_id
+            filtered_history,
+            context.grist_api_key,
+            context.request_id,
         )
 
         context.architecture_analysis = analysis
@@ -273,7 +271,9 @@ class PipelineExecutor:
         # Formater la réponse
         response_text = self._format_architecture_response(analysis)
         context.set_response(response_text, "architecture")
-        context.add_trace("architecture", f"Analyzed {analysis.metrics.total_tables} tables")
+        context.add_trace(
+            "architecture", f"Analyzed {analysis.metrics.total_tables} tables"
+        )
 
     def _format_architecture_response(self, analysis) -> str:
         """Retourne les recommandations brutes sans aucun formatage"""
@@ -284,10 +284,7 @@ class PipelineExecutor:
         return "\n".join(analysis.recommendations)
 
     def _build_response(
-        self,
-        context: ExecutionContext,
-        plan: ExecutionPlan,
-        execution_time: float
+        self, context: ExecutionContext, plan: ExecutionPlan, execution_time: float
     ) -> ChatResponse:
         """
         Construit la réponse finale à partir du contexte.
@@ -310,5 +307,5 @@ class PipelineExecutor:
             agent_used=context.agent_used,
             sql_query=context.sql_query,
             data_analyzed=context.data_analyzed,
-            error=context.error
+            error=context.error,
         )

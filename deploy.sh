@@ -179,8 +179,6 @@ debug_api() {
     # Commande de base
     local cmd="python -m app.main"
 
-    log_info "Conseil: appuyez sur CTRL+C pour arrêter le serveur de développement"
-
     # Lancer au premier plan avec variables d'environnement pour le dev
     ENV=development DEBUG=1 $cmd
 }

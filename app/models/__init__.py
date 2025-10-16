@@ -1,1 +1,1 @@
-# Modèles Pydantic pour l'API 
+# Modèles Pydantic pour l'API

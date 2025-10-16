@@ -1,1 +1,1 @@
-# Intégration avec l'API Grist 
+# Intégration avec l'API Grist

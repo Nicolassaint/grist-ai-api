@@ -38,6 +38,7 @@ from ..pipeline.plans import AgentType
 # Extension de AgentType pour inclure ROUTER (utilisé seulement pour la config)
 class ConfigAgentType(str, Enum):
     """Types d'agents pour configuration (étend AgentType du pipeline)"""
+
     ROUTER = "router"
     GENERIC = "generic"
     SQL = "sql"
@@ -76,9 +77,7 @@ class HistoryConfig:
     exclude_current: bool = True
 
     def filter_history(
-        self,
-        conversation_history: ConversationHistory,
-        exclude_last: bool = None
+        self, conversation_history: ConversationHistory, exclude_last: bool = None
     ) -> List[Message]:
         """
         Filtre l'historique selon la configuration.
@@ -105,12 +104,13 @@ class HistoryConfig:
         # Filtrer les messages système si nécessaire
         if not self.include_system_messages:
             all_messages = [
-                msg for msg in all_messages
-                if msg.role != MessageRole.SYSTEM
+                msg for msg in all_messages if msg.role != MessageRole.SYSTEM
             ]
 
         # Décider si on exclut le dernier message
-        should_exclude_last = exclude_last if exclude_last is not None else self.exclude_current
+        should_exclude_last = (
+            exclude_last if exclude_last is not None else self.exclude_current
+        )
 
         # Si on doit exclure le dernier message (généralement le message utilisateur actuel)
         if should_exclude_last and len(all_messages) > 0:
@@ -118,7 +118,7 @@ class HistoryConfig:
 
         # Limiter au nombre max de messages (les plus récents)
         if self.max_messages > 0:
-            all_messages = all_messages[-self.max_messages:]
+            all_messages = all_messages[-self.max_messages :]
 
         return all_messages
 
@@ -135,9 +135,7 @@ class HistoryConfig:
         return len(self.filter_history(conversation_history))
 
     def format_for_prompt(
-        self,
-        conversation_history: ConversationHistory,
-        exclude_last: bool = None
+        self, conversation_history: ConversationHistory, exclude_last: bool = None
     ) -> List[dict]:
         """
         Formate l'historique filtré pour injection dans un prompt LLM.
@@ -161,17 +159,14 @@ class HistoryConfig:
         filtered_messages = self.filter_history(conversation_history, exclude_last)
 
         return [
-            {
-                "role": msg.role.value,
-                "content": msg.content
-            }
+            {"role": msg.role.value, "content": msg.content}
             for msg in filtered_messages
         ]
 
     def format_as_context_string(
         self,
         conversation_history: ConversationHistory,
-        max_chars_per_message: Optional[int] = None
+        max_chars_per_message: Optional[int] = None,
     ) -> str:
         """
         Formate l'historique en une chaîne de caractères pour inclusion textuelle.
@@ -239,14 +234,14 @@ class HistoryConfig:
         return cls(
             enabled=enabled,
             max_messages=max_messages,
-            include_system_messages=include_system
+            include_system_messages=include_system,
         )
 
     def with_overrides(
         self,
         enabled: Optional[bool] = None,
         max_messages: Optional[int] = None,
-        include_system_messages: Optional[bool] = None
+        include_system_messages: Optional[bool] = None,
     ) -> "HistoryConfig":
         """
         Crée une nouvelle config avec des overrides spécifiques.
@@ -273,25 +268,38 @@ class HistoryConfig:
         """
         return HistoryConfig(
             enabled=enabled if enabled is not None else self.enabled,
-            max_messages=max_messages if max_messages is not None else self.max_messages,
-            include_system_messages=include_system_messages if include_system_messages is not None else self.include_system_messages,
-            exclude_current=self.exclude_current
+            max_messages=max_messages
+            if max_messages is not None
+            else self.max_messages,
+            include_system_messages=include_system_messages
+            if include_system_messages is not None
+            else self.include_system_messages,
+            exclude_current=self.exclude_current,
         )
 
 
 # Configuration par défaut pour chaque agent
 AGENT_HISTORY_CONFIGS = {
-    ConfigAgentType.ROUTER: {"max_messages": 3},  # Router n'a besoin que du contexte immédiat
-    ConfigAgentType.GENERIC: {"max_messages": 5},  # Generic conversation bénéficie de plus d'historique
-    ConfigAgentType.SQL: {"max_messages": 3},      # SQL se concentre sur la requête actuelle
-    ConfigAgentType.ANALYSIS: {"max_messages": 5}, # Analysis peut bénéficier de contexte
-    ConfigAgentType.ARCHITECTURE: {"max_messages": 2}, # Architecture se concentre sur structure actuelle
+    ConfigAgentType.ROUTER: {
+        "max_messages": 3
+    },  # Router n'a besoin que du contexte immédiat
+    ConfigAgentType.GENERIC: {
+        "max_messages": 5
+    },  # Generic conversation bénéficie de plus d'historique
+    ConfigAgentType.SQL: {
+        "max_messages": 3
+    },  # SQL se concentre sur la requête actuelle
+    ConfigAgentType.ANALYSIS: {
+        "max_messages": 5
+    },  # Analysis peut bénéficier de contexte
+    ConfigAgentType.ARCHITECTURE: {
+        "max_messages": 2
+    },  # Architecture se concentre sur structure actuelle
 }
 
 
 def get_agent_config(
-    base_config: HistoryConfig,
-    agent_type: ConfigAgentType
+    base_config: HistoryConfig, agent_type: ConfigAgentType
 ) -> HistoryConfig:
     """
     Obtient une configuration spécifique pour un type d'agent.

@@ -8,6 +8,7 @@ from enum import Enum
 
 class IssueSeverity(str, Enum):
     """Niveaux de sévérité des problèmes détectés"""
+
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
@@ -15,6 +16,7 @@ class IssueSeverity(str, Enum):
 
 class IssueType(str, Enum):
     """Types de problèmes structurels"""
+
     NORMALIZATION = "normalization"
     NAMING = "naming"
     RELATIONSHIPS = "relationships"
@@ -26,6 +28,7 @@ class IssueType(str, Enum):
 
 class RelationshipType(str, Enum):
     """Types de relations entre tables"""
+
     ONE_TO_ONE = "one-to-one"
     ONE_TO_MANY = "one-to-many"
     MANY_TO_MANY = "many-to-many"
@@ -34,6 +37,7 @@ class RelationshipType(str, Enum):
 @dataclass
 class StructuralIssue:
     """Représente un problème de structure détecté"""
+
     type: IssueType
     severity: IssueSeverity
     table: str
@@ -51,13 +55,14 @@ class StructuralIssue:
             "column": self.column,
             "description": self.description,
             "impact": self.impact,
-            "recommendation": self.recommendation
+            "recommendation": self.recommendation,
         }
 
 
 @dataclass
 class RelationshipAnalysis:
     """Analyse des relations entre tables"""
+
     from_table: str
     to_table: str
     relationship_type: RelationshipType
@@ -73,13 +78,14 @@ class RelationshipAnalysis:
             "relationship_type": self.relationship_type.value,
             "column_name": self.column_name,
             "is_properly_indexed": self.is_properly_indexed,
-            "recommendation": self.recommendation
+            "recommendation": self.recommendation,
         }
 
 
 @dataclass
 class NormalizationCheck:
     """Résultats de vérification de normalisation"""
+
     table: str
     normal_form: str  # "1NF", "2NF", "3NF", "BCNF"
     violations: List[str] = field(default_factory=list)
@@ -93,13 +99,14 @@ class NormalizationCheck:
             "normal_form": self.normal_form,
             "violations": self.violations,
             "suggestions": self.suggestions,
-            "score": self.score
+            "score": self.score,
         }
 
 
 @dataclass
 class ArchitectureMetrics:
     """Métriques quantitatives sur la structure - VERSION SIMPLIFIÉE"""
+
     total_tables: int
     total_columns: int
     avg_columns_per_table: float
@@ -117,13 +124,14 @@ class ArchitectureMetrics:
             "total_relationships": self.total_relationships,
             "formula_columns": self.formula_columns,
             "isolated_tables": self.isolated_tables,
-            "complexity_score": round(self.complexity_score, 2)
+            "complexity_score": round(self.complexity_score, 2),
         }
 
 
 @dataclass
 class ArchitectureAnalysis:
     """Résultat complet de l'analyse d'architecture"""
+
     document_id: str
     user_question: str
     schemas: Dict[str, Any]
@@ -159,5 +167,5 @@ class ArchitectureAnalysis:
             "severity_score": round(self.severity_score, 2),
             "quality_score": round(self.get_quality_score(), 2),
             "critical_issues": self.get_critical_issues_count(),
-            "warning_issues": self.get_warning_issues_count()
+            "warning_issues": self.get_warning_issues_count(),
         }

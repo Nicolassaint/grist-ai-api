@@ -24,7 +24,7 @@ class TestRouterAgent:
         router_agent,
         sample_conversation_history,
         sample_request_id,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Routing vers le plan generic"""
         # Arrange
@@ -35,9 +35,7 @@ class TestRouterAgent:
 
         # Act
         result = await router_agent.route_to_plan(
-            user_message,
-            sample_conversation_history,
-            sample_request_id
+            user_message, sample_conversation_history, sample_request_id
         )
 
         # Assert
@@ -51,7 +49,7 @@ class TestRouterAgent:
         router_agent,
         sample_conversation_history,
         sample_request_id,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Routing vers le plan data_query"""
         # Arrange
@@ -62,9 +60,7 @@ class TestRouterAgent:
 
         # Act
         result = await router_agent.route_to_plan(
-            user_message,
-            sample_conversation_history,
-            sample_request_id
+            user_message, sample_conversation_history, sample_request_id
         )
 
         # Assert
@@ -78,7 +74,7 @@ class TestRouterAgent:
         router_agent,
         sample_conversation_history,
         sample_request_id,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Routing vers le plan architecture_review"""
         # Arrange
@@ -89,9 +85,7 @@ class TestRouterAgent:
 
         # Act
         result = await router_agent.route_to_plan(
-            user_message,
-            sample_conversation_history,
-            sample_request_id
+            user_message, sample_conversation_history, sample_request_id
         )
 
         # Assert
@@ -104,7 +98,7 @@ class TestRouterAgent:
         router_agent,
         sample_conversation_history,
         sample_request_id,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Fallback vers generic si plan invalide"""
         # Arrange
@@ -115,9 +109,7 @@ class TestRouterAgent:
 
         # Act
         result = await router_agent.route_to_plan(
-            user_message,
-            sample_conversation_history,
-            sample_request_id
+            user_message, sample_conversation_history, sample_request_id
         )
 
         # Assert
@@ -128,7 +120,7 @@ class TestRouterAgent:
         router_agent,
         sample_conversation_history,
         sample_request_id,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Fallback vers generic en cas d'erreur"""
         # Arrange
@@ -137,36 +129,31 @@ class TestRouterAgent:
 
         # Act
         result = await router_agent.route_to_plan(
-            user_message,
-            sample_conversation_history,
-            sample_request_id
+            user_message, sample_conversation_history, sample_request_id
         )
 
         # Assert
         assert result.name == "generic"  # Fallback sur erreur
 
     async def test_route_with_context(
-        self,
-        router_agent,
-        sample_request_id,
-        mock_openai_client
+        self, router_agent, sample_request_id, mock_openai_client
     ):
         """Test: Routing avec contexte conversationnel"""
         # Arrange
-        conversation = ConversationHistory(messages=[
-            Message(role="user", content="Bonjour"),
-            Message(role="assistant", content="Bonjour!"),
-            Message(role="user", content="Montre les ventes"),
-        ])
+        conversation = ConversationHistory(
+            messages=[
+                Message(role="user", content="Bonjour"),
+                Message(role="assistant", content="Bonjour!"),
+                Message(role="user", content="Montre les ventes"),
+            ]
+        )
         mock_response = Mock()
         mock_response.choices = [Mock(message=Mock(content="data_query"))]
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         # Act
         result = await router_agent.route_to_plan(
-            "Montre les ventes",
-            conversation,
-            sample_request_id
+            "Montre les ventes", conversation, sample_request_id
         )
 
         # Assert

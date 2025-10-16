@@ -25,12 +25,16 @@ class TestAnalysisAgent:
         sample_request_id,
         sample_sql_query,
         sample_sql_results,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Traitement réussi avec données"""
         # Arrange
         mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content="Analyse: Les clients ont un âge moyen de 35 ans."))]
+        mock_response.choices = [
+            Mock(
+                message=Mock(content="Analyse: Les clients ont un âge moyen de 35 ans.")
+            )
+        ]
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         # Act
@@ -39,7 +43,7 @@ class TestAnalysisAgent:
             sample_conversation_history,
             sample_sql_query,
             sample_sql_results,
-            sample_request_id
+            sample_request_id,
         )
 
         # Assert
@@ -53,14 +57,11 @@ class TestAnalysisAgent:
         sample_user_message,
         sample_conversation_history,
         sample_request_id,
-        sample_sql_query
+        sample_sql_query,
     ):
         """Test: Gestion erreur SQL"""
         # Arrange
-        sql_results = {
-            "success": False,
-            "error": "Invalid SQL syntax"
-        }
+        sql_results = {"success": False, "error": "Invalid SQL syntax"}
 
         # Act
         result = await analysis_agent.process_message(
@@ -68,7 +69,7 @@ class TestAnalysisAgent:
             sample_conversation_history,
             sample_sql_query,
             sql_results,
-            sample_request_id
+            sample_request_id,
         )
 
         # Assert
@@ -81,16 +82,11 @@ class TestAnalysisAgent:
         sample_user_message,
         sample_conversation_history,
         sample_request_id,
-        sample_sql_query
+        sample_sql_query,
     ):
         """Test: Résultats vides (cas normal)"""
         # Arrange
-        sql_results = {
-            "success": True,
-            "data": [],
-            "row_count": 0,
-            "columns": []
-        }
+        sql_results = {"success": True, "data": [], "row_count": 0, "columns": []}
 
         # Act
         result = await analysis_agent.process_message(
@@ -98,7 +94,7 @@ class TestAnalysisAgent:
             sample_conversation_history,
             sample_sql_query,
             sql_results,
-            sample_request_id
+            sample_request_id,
         )
 
         # Assert
@@ -113,7 +109,7 @@ class TestAnalysisAgent:
         sample_request_id,
         sample_sql_query,
         sample_sql_results,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Erreur API OpenAI -> fallback"""
         # Arrange
@@ -125,7 +121,7 @@ class TestAnalysisAgent:
             sample_conversation_history,
             sample_sql_query,
             sample_sql_results,
-            sample_request_id
+            sample_request_id,
         )
 
         # Assert
@@ -140,7 +136,7 @@ class TestAnalysisAgent:
         sample_conversation_history,
         sample_request_id,
         sample_sql_query,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Génération d'analyse réussie"""
         # Arrange
@@ -148,7 +144,9 @@ class TestAnalysisAgent:
         numeric_summary = "Total: 3 lignes"
 
         mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content="Analyse claire des données."))]
+        mock_response.choices = [
+            Mock(message=Mock(content="Analyse claire des données."))
+        ]
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         # Act
@@ -158,14 +156,16 @@ class TestAnalysisAgent:
             sample_sql_query,
             formatted_results,
             numeric_summary,
-            sample_request_id
+            sample_request_id,
         )
 
         # Assert
         assert "Analyse" in result
         assert isinstance(result, str)
 
-    def test_format_data_for_analysis_with_data(self, analysis_agent, sample_sql_results):
+    def test_format_data_for_analysis_with_data(
+        self, analysis_agent, sample_sql_results
+    ):
         """Test: Formatage de données SQL"""
         # Act
         result = analysis_agent._format_data_for_analysis(sample_sql_results)
@@ -195,7 +195,7 @@ class TestAnalysisAgent:
         large_results = {
             "success": True,
             "data": [{"id": i} for i in range(50)],
-            "columns": ["id"]
+            "columns": ["id"],
         }
 
         # Act
@@ -211,7 +211,7 @@ class TestAnalysisAgent:
         results = {
             "success": True,
             "data": [{"description": "A" * 100}],
-            "columns": ["description"]
+            "columns": ["description"],
         }
 
         # Act
@@ -230,7 +230,7 @@ class TestAnalysisAgent:
                 {"age": 35, "score": 90},
                 {"age": 45, "score": 85},
             ],
-            "columns": ["age", "score"]
+            "columns": ["age", "score"],
         }
 
         # Act
@@ -251,7 +251,7 @@ class TestAnalysisAgent:
         sql_results = {
             "success": True,
             "data": [{"nom": "Dupont"}, {"nom": "Martin"}],
-            "columns": ["nom"]
+            "columns": ["nom"],
         }
 
         # Act
@@ -275,10 +275,7 @@ class TestAnalysisAgent:
     def test_handle_sql_error(self, analysis_agent):
         """Test: Gestion des erreurs SQL"""
         # Arrange
-        sql_results = {
-            "success": False,
-            "error": "Table not found"
-        }
+        sql_results = {"success": False, "error": "Table not found"}
 
         # Act
         result = analysis_agent._handle_sql_error("Test question", sql_results)
@@ -353,7 +350,7 @@ class TestAnalysisAgentConfiguration:
         sample_conversation_history,
         sample_request_id,
         sample_sql_query,
-        sample_sql_results
+        sample_sql_results,
     ):
         """Test: Paramètres de l'appel OpenAI"""
         agent = AnalysisAgent(mock_openai_client)
@@ -367,7 +364,7 @@ class TestAnalysisAgentConfiguration:
             sample_conversation_history,
             sample_sql_query,
             sample_sql_results,
-            sample_request_id
+            sample_request_id,
         )
 
         # Vérifier les paramètres
@@ -390,7 +387,7 @@ class TestAnalysisAgentEdgeCases:
         results = {
             "success": True,
             "data": [{"a": 1, "b": 2}],
-            "columns": ["a", "b", "c"]  # c n'existe pas
+            "columns": ["a", "b", "c"],  # c n'existe pas
         }
 
         result = analysis_agent._format_data_for_analysis(results)
@@ -407,7 +404,7 @@ class TestAnalysisAgentEdgeCases:
                 {"value": "not a number"},
                 {"value": 20},
             ],
-            "columns": ["value"]
+            "columns": ["value"],
         }
 
         result = analysis_agent._generate_numeric_summary(sql_results)
@@ -420,7 +417,7 @@ class TestAnalysisAgentEdgeCases:
         results = {
             "success": True,
             "data": [{"name": None, "age": 25}],
-            "columns": ["name", "age"]
+            "columns": ["name", "age"],
         }
 
         result = analysis_agent._format_data_for_analysis(results)
@@ -437,7 +434,7 @@ class TestAnalysisAgentEdgeCases:
                 {"score": 20},
                 {"score": 30},
             ],
-            "columns": ["score"]
+            "columns": ["score"],
         }
 
         result = analysis_agent._generate_numeric_summary(sql_results)
@@ -456,7 +453,7 @@ class TestAnalysisAgentEdgeCases:
         sample_request_id,
         sample_sql_query,
         sample_sql_results,
-        mock_openai_client
+        mock_openai_client,
     ):
         """Test: Les espaces en trop sont supprimés"""
         mock_response = Mock()
@@ -468,7 +465,7 @@ class TestAnalysisAgentEdgeCases:
             sample_conversation_history,
             sample_sql_query,
             sample_sql_results,
-            sample_request_id
+            sample_request_id,
         )
 
         assert result == "Analyse avec espaces"

@@ -21,6 +21,7 @@ from enum import Enum
 
 class AgentType(str, Enum):
     """Types d'agents disponibles dans le système"""
+
     GENERIC = "generic"
     SQL = "sql"
     ANALYSIS = "analysis"
@@ -45,6 +46,7 @@ class ExecutionPlan:
         ...     description="Requête de données avec analyse"
         ... )
     """
+
     name: str
     agents: List[AgentType]
     description: str
@@ -63,23 +65,21 @@ AVAILABLE_PLANS = {
         name="generic",
         agents=[AgentType.GENERIC],
         description="Conversation générale, questions sur Grist, aide",
-        requires_api_key=False
+        requires_api_key=False,
     ),
-
     # Plan 2: Requête de données simple
     "data_query": ExecutionPlan(
         name="data_query",
         agents=[AgentType.SQL, AgentType.ANALYSIS],
         description="Requête SQL + analyse des résultats",
-        requires_api_key=True
+        requires_api_key=True,
     ),
-
     # Plan 3: Analyse d'architecture seule
     "architecture_review": ExecutionPlan(
         name="architecture_review",
         agents=[AgentType.ARCHITECTURE],
         description="Analyse de la structure des données (normalisation, relations)",
-        requires_api_key=True
+        requires_api_key=True,
     ),
 }
 

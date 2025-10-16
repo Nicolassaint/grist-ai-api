@@ -44,6 +44,10 @@ import openai
 from typing import Dict, Any
 from ..models.message import ConversationHistory
 from ..utils.logging import AgentLogger
+from ..utils.conversation_formatter import (
+    format_conversation_history,
+    should_include_conversation_history,
+)
 from ..pipeline.plans import ExecutionPlan, get_plan, AVAILABLE_PLANS
 import time
 
@@ -76,7 +80,9 @@ class RouterAgent:
         plans_description = []
         for plan_name, plan in AVAILABLE_PLANS.items():
             agents_list = " → ".join([a.value for a in plan.agents])
-            plans_description.append(f"- **{plan_name}**: {plan.description} [{agents_list}]")
+            plans_description.append(
+                f"- **{plan_name}**: {plan.description} [{agents_list}]"
+            )
 
         return f"""Tu es un agent de routing intelligent pour Grist AI Assistant.
 
@@ -111,7 +117,7 @@ Réponds UNIQUEMENT par le nom du plan: generic, data_query, ou architecture_rev
         self,
         user_message: str,
         conversation_history: ConversationHistory,
-        request_id: str
+        request_id: str,
     ) -> ExecutionPlan:
         """
         Détermine le plan d'exécution approprié pour le message.
@@ -142,9 +148,7 @@ Réponds UNIQUEMENT par le nom du plan: generic, data_query, ou architecture_rev
         try:
             # Appel LLM pour classifier l'intention
             plan_name = await self._classify_intent(
-                user_message,
-                conversation_history,
-                request_id
+                user_message, conversation_history, request_id
             )
 
             # Récupérer le plan correspondant
@@ -154,16 +158,14 @@ Réponds UNIQUEMENT par le nom du plan: generic, data_query, ou architecture_rev
                 # Plan inconnu → fallback sur generic
                 self.logger.warning(
                     f"Plan inconnu '{plan_name}', fallback sur generic",
-                    request_id=request_id
+                    request_id=request_id,
                 )
                 plan = get_plan("generic")
 
             execution_time = time.time() - start_time
 
             self.logger.log_agent_response(
-                request_id,
-                f"Plan sélectionné: {plan.name}",
-                execution_time
+                request_id, f"Plan sélectionné: {plan.name}", execution_time
             )
 
             self.logger.info(
@@ -171,7 +173,7 @@ Réponds UNIQUEMENT par le nom du plan: generic, data_query, ou architecture_rev
                 request_id=request_id,
                 plan_name=plan.name,
                 agents_count=len(plan.agents),
-                requires_api_key=plan.requires_api_key
+                requires_api_key=plan.requires_api_key,
             )
 
             return plan
@@ -181,7 +183,7 @@ Réponds UNIQUEMENT par le nom du plan: generic, data_query, ou architecture_rev
             self.logger.error(
                 f"❌ Erreur lors du routing: {str(e)}",
                 request_id=request_id,
-                execution_time=execution_time
+                execution_time=execution_time,
             )
             # Fallback sur plan generic en cas d'erreur
             return get_plan("generic")
@@ -190,7 +192,7 @@ Réponds UNIQUEMENT par le nom du plan: generic, data_query, ou architecture_rev
         self,
         user_message: str,
         conversation_history: ConversationHistory,
-        request_id: str
+        request_id: str,
     ) -> str:
         """
         Utilise le LLM pour classifier l'intention et retourner le nom du plan.
@@ -204,47 +206,75 @@ Réponds UNIQUEMENT par le nom du plan: generic, data_query, ou architecture_rev
             Nom du plan (ex: "data_query")
         """
         # Construction des messages pour le LLM
-        messages = [
-            {"role": "system", "content": self.routing_prompt}
-        ]
+        messages = [{"role": "system", "content": self.routing_prompt}]
 
-        # Ajout du contexte conversationnel (déjà filtré par la configuration centralisée)
-        # Plus besoin d'appeler get_recent_messages car le filtrage est fait en amont
-        if len(conversation_history.messages) > 0:
-            context = "Contexte récent:\n"
-            for msg in conversation_history.messages:
-                context += f"- {msg.role}: {msg.content[:100]}\n"
-            messages.append({"role": "system", "content": context})
+        # Ajout de l'historique conversationnel formaté (paires user/assistant complètes)
+        if (
+            should_include_conversation_history("router")
+            and len(conversation_history.messages) > 0
+        ):
+            conversation_context = format_conversation_history(
+                conversation_history, max_pairs=2
+            )
+            if conversation_context != "Aucun historique de conversation":
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": f"Contexte récent:\n{conversation_context}",
+                    }
+                )
 
         # Message utilisateur à classifier
-        messages.append({
-            "role": "user",
-            "content": f"Message à router: {user_message}"
-        })
+        messages.append(
+            {"role": "user", "content": f"Message à router: {user_message}"}
+        )
+
+        # 🤖 Log lisible de la requête IA
+        prompt_text = "\n".join(
+            [f"{msg['role']}: {msg['content']}" for msg in messages]
+        )
+        self.logger.log_ai_request(
+            model=self.model,
+            messages_count=len(messages),
+            max_tokens=20,
+            request_id=request_id,
+            prompt_preview=prompt_text,
+        )
 
         # Appel LLM
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             max_tokens=20,
-            temperature=0.1  # Peu de créativité pour classification
+            temperature=0.1,  # Peu de créativité pour classification
         )
 
         plan_name = response.choices[0].message.content.strip().lower()
 
+        # 🤖 Log lisible de la réponse IA
+        tokens_used = (
+            getattr(response.usage, "total_tokens", None)
+            if hasattr(response, "usage")
+            else None
+        )
+        self.logger.log_ai_response(
+            model=self.model,
+            tokens_used=tokens_used,
+            success=True,
+            request_id=request_id,
+            response_preview=plan_name,
+        )
+
         self.logger.debug(
             f"Intention classifiée: {plan_name}",
             request_id=request_id,
-            user_message_preview=user_message[:100]
+            user_message_preview=user_message[:100],
         )
 
         return plan_name
 
     async def explain_routing(
-        self,
-        user_message: str,
-        plan: ExecutionPlan,
-        request_id: str
+        self, user_message: str, plan: ExecutionPlan, request_id: str
     ) -> str:
         """
         Génère une explication lisible de la décision de routing.
@@ -272,9 +302,6 @@ Réponds UNIQUEMENT par le nom du plan: generic, data_query, ou architecture_rev
             f"{plan.description}"
         )
 
-        self.logger.debug(
-            f"Explication routing: {explanation}",
-            request_id=request_id
-        )
+        self.logger.debug(f"Explication routing: {explanation}", request_id=request_id)
 
         return explanation

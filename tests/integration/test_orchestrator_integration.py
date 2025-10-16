@@ -21,9 +21,9 @@ class TestOrchestratorIntegration:
         assert orch.router is not None
         assert orch.generic_agent is not None
         assert orch.analysis_agent is not None
-        assert hasattr(orch, 'openai_client')
-        assert hasattr(orch, 'default_model')
-        assert hasattr(orch, 'stats')
+        assert hasattr(orch, "openai_client")
+        assert hasattr(orch, "default_model")
+        assert hasattr(orch, "stats")
 
     def test_orchestrator_stats_initialization(self):
         """Test: Initialisation des statistiques"""
@@ -42,14 +42,19 @@ class TestOrchestratorIntegration:
         """Test: Vérification de santé du système"""
         # Arrange
         orch = AIOrchestrator()
-        
+
         # Mock de la réponse OpenAI pour éviter les appels réels à l'API
         from unittest.mock import AsyncMock
+
         mock_response = mocker.MagicMock()
-        mock_response.choices = [mocker.MagicMock(message=mocker.MagicMock(content="ok"))]
-        
+        mock_response.choices = [
+            mocker.MagicMock(message=mocker.MagicMock(content="ok"))
+        ]
+
         # Utiliser AsyncMock pour les méthodes async
-        orch.openai_client.chat.completions.create = AsyncMock(return_value=mock_response)
+        orch.openai_client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
 
         # Act
         health = await orch.health_check()

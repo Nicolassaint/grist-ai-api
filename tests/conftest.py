@@ -10,6 +10,7 @@ import openai
 
 # ========== CONFIGURATION PYTEST ==========
 
+
 @pytest.fixture(scope="session")
 def event_loop():
     """Crée un event loop pour toute la session de tests"""
@@ -19,6 +20,7 @@ def event_loop():
 
 
 # ========== FIXTURES GÉNÉRALES ==========
+
 
 @pytest.fixture
 def sample_user_message():
@@ -40,17 +42,42 @@ def sample_document_id():
 
 # ========== FIXTURES GRIST ==========
 
+
 @pytest.fixture
 def sample_table_schema():
     """Schéma de table Grist simple pour les tests"""
     return {
         "table_id": "Clients",
         "columns": [
-            {"id": "A", "label": "nom", "type": "Text", "formula": "", "description": "Nom du client"},
-            {"id": "B", "label": "email", "type": "Text", "formula": "", "description": "Email du client"},
-            {"id": "C", "label": "telephone", "type": "Text", "formula": "", "description": ""},
-            {"id": "D", "label": "age", "type": "Numeric", "formula": "", "description": "Âge en années"},
-        ]
+            {
+                "id": "A",
+                "label": "nom",
+                "type": "Text",
+                "formula": "",
+                "description": "Nom du client",
+            },
+            {
+                "id": "B",
+                "label": "email",
+                "type": "Text",
+                "formula": "",
+                "description": "Email du client",
+            },
+            {
+                "id": "C",
+                "label": "telephone",
+                "type": "Text",
+                "formula": "",
+                "description": "",
+            },
+            {
+                "id": "D",
+                "label": "age",
+                "type": "Numeric",
+                "formula": "",
+                "description": "Âge en années",
+            },
+        ],
     }
 
 
@@ -61,28 +88,88 @@ def sample_schemas():
         "Clients": {
             "table_id": "Clients",
             "columns": [
-                {"id": "A", "label": "nom", "type": "Text", "formula": "", "description": ""},
-                {"id": "B", "label": "email", "type": "Text", "formula": "", "description": ""},
-                {"id": "C", "label": "date_creation", "type": "Date", "formula": "", "description": ""},
-            ]
+                {
+                    "id": "A",
+                    "label": "nom",
+                    "type": "Text",
+                    "formula": "",
+                    "description": "",
+                },
+                {
+                    "id": "B",
+                    "label": "email",
+                    "type": "Text",
+                    "formula": "",
+                    "description": "",
+                },
+                {
+                    "id": "C",
+                    "label": "date_creation",
+                    "type": "Date",
+                    "formula": "",
+                    "description": "",
+                },
+            ],
         },
         "Commandes": {
             "table_id": "Commandes",
             "columns": [
-                {"id": "A", "label": "client_id", "type": "Reference", "formula": "$Clients", "description": ""},
-                {"id": "B", "label": "date", "type": "Date", "formula": "", "description": ""},
-                {"id": "C", "label": "montant", "type": "Numeric", "formula": "", "description": ""},
-                {"id": "D", "label": "montant_ttc", "type": "Numeric", "formula": "$montant * 1.2", "description": ""},
-            ]
+                {
+                    "id": "A",
+                    "label": "client_id",
+                    "type": "Reference",
+                    "formula": "$Clients",
+                    "description": "",
+                },
+                {
+                    "id": "B",
+                    "label": "date",
+                    "type": "Date",
+                    "formula": "",
+                    "description": "",
+                },
+                {
+                    "id": "C",
+                    "label": "montant",
+                    "type": "Numeric",
+                    "formula": "",
+                    "description": "",
+                },
+                {
+                    "id": "D",
+                    "label": "montant_ttc",
+                    "type": "Numeric",
+                    "formula": "$montant * 1.2",
+                    "description": "",
+                },
+            ],
         },
         "Produits": {
             "table_id": "Produits",
             "columns": [
-                {"id": "A", "label": "nom", "type": "Text", "formula": "", "description": ""},
-                {"id": "B", "label": "prix", "type": "Numeric", "formula": "", "description": ""},
-                {"id": "C", "label": "stock", "type": "Integer", "formula": "", "description": ""},
-            ]
-        }
+                {
+                    "id": "A",
+                    "label": "nom",
+                    "type": "Text",
+                    "formula": "",
+                    "description": "",
+                },
+                {
+                    "id": "B",
+                    "label": "prix",
+                    "type": "Numeric",
+                    "formula": "",
+                    "description": "",
+                },
+                {
+                    "id": "C",
+                    "label": "stock",
+                    "type": "Integer",
+                    "formula": "",
+                    "description": "",
+                },
+            ],
+        },
     }
 
 
@@ -97,17 +184,20 @@ def sample_sql_results():
             {"nom": "Bernard", "email": "bernard@mail.com", "age": 28},
         ],
         "columns": ["nom", "email", "age"],
-        "row_count": 3
+        "row_count": 3,
     }
 
 
 @pytest.fixture
 def sample_sql_query():
     """Requête SQL simulée pour les tests"""
-    return "SELECT nom, email, age FROM Clients WHERE age > 25 ORDER BY age DESC LIMIT 10"
+    return (
+        "SELECT nom, email, age FROM Clients WHERE age > 25 ORDER BY age DESC LIMIT 10"
+    )
 
 
 # ========== MOCKS OPENAI ==========
+
 
 @pytest.fixture
 def mock_openai_client():
@@ -131,16 +221,17 @@ def mock_openai_client():
 @pytest.fixture
 def mock_openai_router_response():
     """Mock de réponse du router agent"""
+
     def _create_response(agent_type: str = "SQL"):
         mock_response = MagicMock()
-        mock_response.choices = [
-            MagicMock(message=MagicMock(content=agent_type))
-        ]
+        mock_response.choices = [MagicMock(message=MagicMock(content=agent_type))]
         return mock_response
+
     return _create_response
 
 
 # ========== MOCKS GRIST ==========
+
 
 @pytest.fixture
 def mock_schema_fetcher(sample_schemas):
@@ -149,8 +240,12 @@ def mock_schema_fetcher(sample_schemas):
 
     mock_fetcher = AsyncMock(spec=GristSchemaFetcher)
     mock_fetcher.get_all_schemas = AsyncMock(return_value=sample_schemas)
-    mock_fetcher.get_document_tables = AsyncMock(return_value=list(sample_schemas.keys()))
-    mock_fetcher.get_table_schema = AsyncMock(side_effect=lambda doc_id, table_id, req_id: sample_schemas.get(table_id))
+    mock_fetcher.get_document_tables = AsyncMock(
+        return_value=list(sample_schemas.keys())
+    )
+    mock_fetcher.get_table_schema = AsyncMock(
+        side_effect=lambda doc_id, table_id, req_id: sample_schemas.get(table_id)
+    )
     mock_fetcher.format_schema_for_prompt = Mock(return_value="Schémas formatés")
 
     return mock_fetcher
@@ -171,6 +266,7 @@ def mock_sql_runner(sample_sql_results, sample_sql_query):
 
 # ========== FIXTURES AGENTS ==========
 
+
 @pytest.fixture
 def mock_router_agent():
     """Mock du RouterAgent"""
@@ -184,7 +280,7 @@ def mock_router_agent():
         name="data_query",
         agents=[AgentType.SQL, AgentType.ANALYSIS],
         description="Test plan",
-        requires_api_key=True
+        requires_api_key=True,
     )
     mock_agent.route_to_plan = AsyncMock(return_value=mock_plan)
 
@@ -197,7 +293,9 @@ def mock_generic_agent():
     from app.agents.generic_agent import GenericAgent
 
     mock_agent = AsyncMock(spec=GenericAgent)
-    mock_agent.process_message = AsyncMock(return_value="Bonjour! Comment puis-je vous aider?")
+    mock_agent.process_message = AsyncMock(
+        return_value="Bonjour! Comment puis-je vous aider?"
+    )
 
     return mock_agent
 
@@ -221,7 +319,9 @@ def mock_analysis_agent():
     from app.agents.analysis_agent import AnalysisAgent
 
     mock_agent = AsyncMock(spec=AnalysisAgent)
-    mock_agent.process_message = AsyncMock(return_value="Analyse des données: tendance à la hausse")
+    mock_agent.process_message = AsyncMock(
+        return_value="Analyse des données: tendance à la hausse"
+    )
 
     return mock_agent
 
@@ -230,10 +330,7 @@ def mock_analysis_agent():
 def mock_architecture_agent():
     """Mock du DataArchitectureAgent"""
     from app.agents.architecture_agent import DataArchitectureAgent
-    from app.models.architecture import (
-        ArchitectureAnalysis,
-        ArchitectureMetrics
-    )
+    from app.models.architecture import ArchitectureAnalysis, ArchitectureMetrics
 
     mock_agent = AsyncMock(spec=DataArchitectureAgent)
 
@@ -246,9 +343,9 @@ def mock_architecture_agent():
             total_tables=3,
             total_columns=10,
             avg_columns_per_table=3.3,
-            total_relationships=2
+            total_relationships=2,
         ),
-        recommendations=["Améliorer la normalisation"]
+        recommendations=["Améliorer la normalisation"],
     )
 
     mock_agent.analyze_document_structure = AsyncMock(return_value=mock_analysis)
@@ -257,6 +354,7 @@ def mock_architecture_agent():
 
 
 # ========== FIXTURES MESSAGES ==========
+
 
 @pytest.fixture
 def sample_conversation_history():
@@ -282,11 +380,12 @@ def sample_processed_request(sample_document_id, sample_conversation_history):
         messages=sample_conversation_history.messages,
         grist_api_key="test-api-key-123",
         execution_mode="test",
-        webhook_url="http://test-webhook.com/callback"
+        webhook_url="http://test-webhook.com/callback",
     )
 
 
 # ========== FIXTURES COMPLEXES ==========
+
 
 @pytest.fixture
 def complex_schemas_with_issues():
@@ -295,40 +394,62 @@ def complex_schemas_with_issues():
         "TableTropLarge": {
             "table_id": "TableTropLarge",
             "columns": [
-                {"id": f"col{i}", "label": f"column_{i}", "type": "Text", "formula": "", "description": ""}
+                {
+                    "id": f"col{i}",
+                    "label": f"column_{i}",
+                    "type": "Text",
+                    "formula": "",
+                    "description": "",
+                }
                 for i in range(25)  # 25 colonnes = trop large
-            ]
+            ],
         },
         "TableIsolee": {
             "table_id": "TableIsolee",
             "columns": [
-                {"id": "A", "label": "data", "type": "Text", "formula": "", "description": ""},
-            ]
+                {
+                    "id": "A",
+                    "label": "data",
+                    "type": "Text",
+                    "formula": "",
+                    "description": "",
+                },
+            ],
         },
         "Table Mal Nommée": {  # Espace dans le nom
             "table_id": "Table Mal Nommée",
             "columns": [
-                {"id": "A", "label": "col1", "type": "Any", "formula": "", "description": ""},  # Type Any
-            ]
-        }
+                {
+                    "id": "A",
+                    "label": "col1",
+                    "type": "Any",
+                    "formula": "",
+                    "description": "",
+                },  # Type Any
+            ],
+        },
     }
 
 
 # ========== HELPERS ==========
 
+
 @pytest.fixture
 def assert_async_called_with():
     """Helper pour vérifier les appels de mocks async"""
+
     def _assert(mock_func, *args, **kwargs):
         mock_func.assert_called_once()
         actual_args, actual_kwargs = mock_func.call_args
         assert actual_args == args
         for key, value in kwargs.items():
             assert actual_kwargs[key] == value
+
     return _assert
 
 
 # ========== NETTOYAGE ==========
+
 
 @pytest.fixture(autouse=True)
 def reset_mocks(mocker):

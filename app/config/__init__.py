@@ -9,7 +9,7 @@ from .history_config import (
     ConfigAgentType,
     get_agent_config,
     default_history_config,
-    AGENT_HISTORY_CONFIGS
+    AGENT_HISTORY_CONFIGS,
 )
 
 __all__ = [
@@ -17,5 +17,5 @@ __all__ = [
     "ConfigAgentType",
     "get_agent_config",
     "default_history_config",
-    "AGENT_HISTORY_CONFIGS"
+    "AGENT_HISTORY_CONFIGS",
 ]
