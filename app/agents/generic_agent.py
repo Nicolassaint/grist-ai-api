@@ -39,79 +39,135 @@ Exemples de réponses appropriées :
 - Conseils sur comment poser des questions d'analyse
 - Aide générale sur Grist"""
 
-    async def process_message(
-        self,
-        user_message: str,
-        conversation_history: ConversationHistory,
-        request_id: str,
-    ) -> str:
-        """Traite un message générique"""
+    async def process_message(self, context) -> str:
+        """Traite un message générique ou fallback d'erreur"""
         start_time = time.time()
 
-        self.logger.log_agent_start("generic", user_message[:80])
+        self.logger.log_agent_start("generic", context.user_message[:80])
+
+        # Vérifier si on arrive d'une erreur d'un autre agent
+        if context.error:
+            return self._handle_error_fallback(context)
 
         try:
-            # Construction du contexte conversationnel
-            messages = [{"role": "system", "content": self.system_prompt}]
-
-            # Ajout de l'historique de conversation formaté (paires user/assistant complètes)
-            if should_include_conversation_history("generic"):
-                history_messages = format_conversation_for_llm_messages(
-                    conversation_history, max_pairs=3
-                )
-                messages.extend(history_messages)
-
-            # 🤖 Log lisible de la requête IA
-            prompt_text = "\n".join(
-                [f"{msg['role']}: {msg['content']}" for msg in messages]
-            )
-            self.logger.log_ai_request(
-                model=self.model,
-                messages_count=len(messages),
-                max_tokens=200,
-                request_id=request_id,
-                prompt_preview=prompt_text,
-            )
-
-            response = await self.client.chat.completions.create(
-                model=self.model, messages=messages, max_tokens=200, temperature=0.7
-            )
-
-            ai_response = response.choices[0].message.content.strip()
-
-            # 🤖 Log lisible de la réponse IA
-            tokens_used = (
-                getattr(response.usage, "total_tokens", None)
-                if hasattr(response, "usage")
-                else None
-            )
-            self.logger.log_ai_response(
-                model=self.model,
-                tokens_used=tokens_used,
-                success=True,
-                request_id=request_id,
-                response_preview=ai_response,
-            )
-
-            execution_time = time.time() - start_time
-            self.logger.log_agent_response("generic", True, execution_time)
-
-            return ai_response
-
+            # Traitement normal pour message générique
+            return await self._generate_generic_response(context)
+            
         except Exception as e:
             execution_time = time.time() - start_time
 
             # 🤖 Log lisible d'erreur IA
             self.logger.log_ai_response(
-                model=self.model, success=False, request_id=request_id
+                model=self.model, success=False, request_id=context.request_id
             )
 
             self.logger.error(
                 f"Erreur lors du traitement générique: {str(e)}",
-                request_id=request_id,
+                request_id=context.request_id,
                 execution_time=execution_time,
             )
-            return self._get_fallback_response(user_message)
+            return self._get_fallback_response(context.user_message)
+    
+    def _handle_error_fallback(self, context) -> str:
+        """Gère les fallbacks d'erreurs d'autres agents"""
+        
+        if context.agent_used == "sql":
+            return self._handle_sql_fallback(context.user_message, context.error)
+        elif context.agent_used == "architecture":
+            return self._handle_architecture_fallback(context.user_message, context.error)
+        else:
+            return self._handle_generic_error_fallback(context.user_message, context.error)
+    
+    def _handle_sql_fallback(self, user_message: str, sql_error: str) -> str:
+        """Fallback spécifique pour les erreurs SQL"""
+        return f"""Je ne peux pas exécuter votre requête sur les données.
+
+**Problème :** {sql_error}
+
+Vous pouvez essayer de :
+• Vérifier vos permissions d'accès au document
+• Reformuler votre question différemment
+• Me poser une question générale sur Grist
+
+En attendant, je peux vous aider avec d'autres questions !"""
+    
+    def _handle_architecture_fallback(self, user_message: str, architecture_error: str) -> str:
+        """Fallback spécifique pour les erreurs d'architecture"""
+        return f"""Je ne peux pas analyser la structure de vos données.
+
+**Problème :** {architecture_error}
+
+Vous pouvez essayer de :
+• Vérifier vos permissions d'accès
+• Reformuler votre question sur la structure des données
+• Me poser d'autres questions sur Grist
+
+Comment puis-je vous aider autrement ?"""
+    
+    def _handle_generic_error_fallback(self, user_message: str, error: str) -> str:
+        """Fallback générique pour autres erreurs"""
+        return f"""Je rencontre une difficulté technique.
+
+**Problème :** {error}
+
+Pouvez-vous :
+• Reformuler votre question
+• Essayer une approche différente
+• Me poser une autre question
+
+Je suis là pour vous aider avec Grist !"""
+    
+    async def _generate_generic_response(self, context) -> str:
+        """Génère une réponse générique normale"""
+        
+        # Construction du contexte conversationnel
+        messages = [{"role": "system", "content": self.system_prompt}]
+
+        # Ajout de l'historique de conversation formaté (paires user/assistant complètes)
+        if should_include_conversation_history("generic"):
+            history_messages = format_conversation_for_llm_messages(
+                context.conversation_history, max_pairs=3
+            )
+            messages.extend(history_messages)
+
+        messages.append({"role": "user", "content": context.user_message})
+
+        # 🤖 Log lisible de la requête IA
+        prompt_text = "\n".join(
+            [f"{msg['role']}: {msg['content']}" for msg in messages]
+        )
+        self.logger.log_ai_request(
+            model=self.model,
+            messages_count=len(messages),
+            max_tokens=200,
+            request_id=context.request_id,
+            prompt_preview=prompt_text,
+        )
+
+        response = await self.client.chat.completions.create(
+            model=self.model, messages=messages, max_tokens=200, temperature=0.7
+        )
+
+        ai_response = response.choices[0].message.content.strip()
+
+        # 🤖 Log lisible de la réponse IA
+        tokens_used = (
+            getattr(response.usage, "total_tokens", None)
+            if hasattr(response, "usage")
+            else None
+        )
+        self.logger.log_ai_response(
+            model=self.model,
+            tokens_used=tokens_used,
+            success=True,
+            request_id=context.request_id,
+            response_preview=ai_response,
+        )
+
+        execution_time = time.time() - time.time()
+        self.logger.log_agent_response("generic", True, execution_time)
+
+        return ai_response
 
     def _get_fallback_response(self, user_message: str) -> str:
         """Réponse de secours en cas d'erreur"""

@@ -68,8 +68,9 @@ Exemple de format attendu:
 
             # Gestion intelligente des données vides vs erreurs
             if not sql_results.get("success"):
-                # Vraie erreur SQL
-                return self._handle_sql_error(user_message, sql_results)
+                # Vraie erreur SQL - fallback simple
+                error_msg = sql_results.get("error", "Erreur SQL inconnue")
+                return f"Aucune donnée trouvée pour cette requête. Erreur: {error_msg}"
             elif not sql_results.get("data") or len(sql_results["data"]) == 0:
                 # Requête réussie mais sans données - cas normal
                 return self._handle_empty_results(user_message, sql_query)
@@ -287,26 +288,6 @@ Exemple de format attendu:
 
         return "\n".join(response_parts)
 
-    def _handle_sql_error(self, user_message: str, sql_results: Dict[str, Any]) -> str:
-        """Gère les vraies erreurs SQL (échec de requête)"""
-
-        error_msg = sql_results.get("error", "Erreur SQL inconnue")
-
-        response_parts = [
-            "## ❌ Erreur d'exécution SQL",
-            "",
-            "La requête SQL a échoué et ne peut pas être analysée.",
-            "",
-            f"**Erreur technique :** {error_msg}",
-            "",
-            "### Suggestions pour résoudre :",
-            "• Vérifiez vos permissions d'accès aux données",
-            "• Reformulez votre question avec des termes plus simples",
-            "• Assurez-vous que les tables et colonnes existent",
-            "• Contactez l'administrateur si l'erreur persiste",
-        ]
-
-        return "\n".join(response_parts)
 
     def _handle_empty_results(self, user_message: str, sql_query: str) -> str:
         """Gère les résultats vides (requête réussie mais aucune donnée)"""

@@ -73,7 +73,7 @@ class TestAnalysisAgent:
         )
 
         # Assert
-        assert "Erreur" in result
+        assert "Aucune donnée trouvée" in result
         assert "Invalid SQL syntax" in result
 
     async def test_process_message_empty_results(
@@ -272,18 +272,6 @@ class TestAnalysisAgent:
         # Assert
         assert "Aucune donnée numérique disponible" in result
 
-    def test_handle_sql_error(self, analysis_agent):
-        """Test: Gestion des erreurs SQL"""
-        # Arrange
-        sql_results = {"success": False, "error": "Table not found"}
-
-        # Act
-        result = analysis_agent._handle_sql_error("Test question", sql_results)
-
-        # Assert
-        assert "Erreur" in result
-        assert "Table not found" in result
-        assert "Suggestions" in result
 
     def test_handle_empty_results(self, analysis_agent, sample_sql_query):
         """Test: Gestion des résultats vides"""
@@ -470,11 +458,3 @@ class TestAnalysisAgentEdgeCases:
 
         assert result == "Analyse avec espaces"
 
-    def test_handle_sql_error_without_error_message(self, analysis_agent):
-        """Test: Erreur SQL sans message d'erreur"""
-        sql_results = {"success": False}
-
-        result = analysis_agent._handle_sql_error("Test", sql_results)
-
-        assert "Erreur" in result
-        assert "Erreur SQL inconnue" in result

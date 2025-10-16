@@ -121,35 +121,36 @@ Explication : Cette requête récupère..."""
                 )
 
             # 4. Exécution de la requête
-            sql_results = await self.sql_runner.execute_sql(
-                document_id, sql_query, request_id
-            )
-
-            # 5. Formatage de la réponse
-            response_text = self._format_sql_response(
-                sql_query, sql_results, user_message
-            )
-
+            sql_results = await self.sql_runner.execute_sql(context.document_id, sql_query, context.request_id)
+            
+            # 5. Vérification des résultats
+            if not sql_results["success"]:
+                context.set_error(sql_results.get('error', 'Erreur inconnue lors de l\'exécution SQL'), "sql")
+                context.sql_query = sql_query  # Garder la requête pour debug
+                return None  # Fallback vers Generic
+            
+            # 6. Succès - formatage de la réponse
+            context.sql_query = sql_query
+            context.sql_results = sql_results
+            context.data_analyzed = True
+            
+            response_text = self._format_successful_sql_response(sql_query, sql_results)
+            
             execution_time = time.time() - start_time
             self.logger.log_agent_response("sql", True, execution_time)
             self.logger.log_sql_generation(sql_query, len(schemas))
-
-            return response_text, sql_query, sql_results
-
+            
+            return response_text
+            
         except Exception as e:
             execution_time = time.time() - start_time
             self.logger.error(
                 f"Erreur lors du traitement SQL: {str(e)}",
-                request_id=request_id,
-                execution_time=execution_time,
+                request_id=context.request_id,
+                execution_time=execution_time
             )
-            return (
-                (
-                    f"Désolé, j'ai rencontré une erreur lors de l'analyse de vos données : {str(e)}"
-                ),
-                None,
-                None,
-            )
+            context.set_error(f"Erreur technique: {str(e)}", "sql")
+            return None  # Fallback vers Generic
 
     async def _generate_sql_query(
         self,
@@ -269,18 +270,9 @@ Explication : Cette requête récupère..."""
 
         return None
 
-    def _format_sql_response(
-        self, sql_query: str, sql_results: Dict[str, Any], user_question: str
-    ) -> str:
-        """Formate la réponse finale avec les résultats SQL"""
-
-        if not sql_results["success"]:
-            return (
-                f"J'ai généré cette requête SQL :\n\n```sql\n{sql_query}\n```\n\n"
-                f"Mais elle a produit une erreur : {sql_results.get('error', 'Erreur inconnue')}\n\n"
-                f"Pouvez-vous vérifier votre question ou les données disponibles ?"
-            )
-
+    def _format_successful_sql_response(self, sql_query: str, sql_results: Dict[str, Any]) -> str:
+        """Formate la réponse pour une requête SQL réussie"""
+        
         row_count = sql_results.get("row_count", 0)
 
         if row_count == 0:
@@ -312,22 +304,3 @@ Explication : Cette requête récupère..."""
 
         return "\n".join(response)
 
-    def _suggest_improvements(
-        self, user_message: str, schemas: Dict[str, Dict[str, Any]]
-    ) -> str:
-        """Suggère des améliorations pour des questions ambiguës"""
-
-        available_tables = list(schemas.keys())
-
-        suggestions = [
-            f"Pour vous aider davantage, voici les tables disponibles : {', '.join(available_tables)}",
-            "",
-            "Vous pouvez être plus spécifique en mentionnant :",
-            "• La période qui vous intéresse (mois dernier, cette année...)",
-            "• Les critères de filtrage souhaités",
-            "• Le type d'agrégation (somme, moyenne, nombre...)",
-            "",
-            "Exemple : 'Montre-moi le total des ventes par mois pour cette année'",
-        ]
-
-        return "\n".join(suggestions)

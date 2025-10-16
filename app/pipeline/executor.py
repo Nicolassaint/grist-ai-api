@@ -102,6 +102,11 @@ class PipelineExecutor:
         for agent_type in plan.agents:
             try:
                 await self._execute_agent(agent_type, context)
+                
+                # Si on a une réponse, on peut s'arrêter (fallback géré)
+                if context.response_text:
+                    break
+                    
             except Exception as e:
                 self.logger.error(
                     f"Erreur lors de l'exécution de {agent_type.value}: {str(e)}",
@@ -189,40 +194,31 @@ class PipelineExecutor:
 
     async def _execute_generic_agent(self, agent, context: ExecutionContext):
         """Exécute l'agent générique"""
-        # Passer un historique pré-filtré à l'agent avec config spécifique generic
-        filtered_history = self._get_filtered_history(context, ConfigAgentType.GENERIC)
-
-        response = await agent.process_message(
-            context.user_message, filtered_history, context.request_id
-        )
+        response = await agent.process_message(context)
         context.set_response(response, "generic")
 
     async def _execute_sql_agent(self, agent, context: ExecutionContext):
-        """Exécute l'agent SQL"""
-        # Passer un historique pré-filtré à l'agent avec config spécifique SQL
-        filtered_history = self._get_filtered_history(context, ConfigAgentType.SQL)
-
-        response, sql_query, sql_results = await agent.process_message(
-            context.user_message,
-            filtered_history,
-            context.document_id,
-            context.grist_api_key,
-            context.request_id,
-        )
-
-        # Enrichir le contexte
-        context.sql_query = sql_query
-        context.sql_results = sql_results
-        context.data_analyzed = True
-
-        # Ne set la réponse que si pas d'agent suivant qui va l'utiliser
-        # (Analysis agent va override si présent)
-        if not context.has("analysis"):
-            context.set_response(response, "sql")
-
+        """Exécute l'agent SQL avec fallback vers Generic"""
+        response = await agent.process_message(context)
+        
+        # Si SQL agent retourne None (erreur), fallback vers Generic
+        if response is None:
+            self.logger.info(
+                f"SQL agent failed, fallback to Generic",
+                request_id=context.request_id,
+                error=context.error
+            )
+            # Exécuter Generic Agent pour gérer l'erreur
+            generic_agent = self.agents.get(AgentType.GENERIC)
+            if generic_agent:
+                await self._execute_generic_agent(generic_agent, context)
+            return
+        
+        # Succès SQL - définir la réponse
+        context.set_response(response, "sql")
         context.add_trace(
             "sql",
-            f"Executed query, got {sql_results.get('row_count', 0) if sql_results else 0} rows",
+            f"Executed query, got {context.sql_results.get('row_count', 0) if context.sql_results else 0} rows",
         )
 
     async def _execute_analysis_agent(self, agent, context: ExecutionContext):

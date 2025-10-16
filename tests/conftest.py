@@ -301,14 +301,12 @@ def mock_generic_agent():
 
 
 @pytest.fixture
-def mock_sql_agent(sample_sql_query, sample_sql_results):
+def mock_sql_agent():
     """Mock du SQLAgent"""
     from app.agents.sql_agent import SQLAgent
 
     mock_agent = AsyncMock(spec=SQLAgent)
-    mock_agent.process_message = AsyncMock(
-        return_value=("Réponse SQL", sample_sql_query, sample_sql_results)
-    )
+    mock_agent.process_message = AsyncMock(return_value="Réponse SQL générée")
 
     return mock_agent
 
@@ -351,6 +349,42 @@ def mock_architecture_agent():
     mock_agent.analyze_document_structure = AsyncMock(return_value=mock_analysis)
 
     return mock_agent
+
+
+@pytest.fixture
+def mock_sample_fetcher():
+    """Mock du GristSampleFetcher"""
+    from app.grist.sample_fetcher import GristSampleFetcher
+    
+    mock_fetcher = AsyncMock(spec=GristSampleFetcher)
+    mock_fetcher.fetch_all_samples = AsyncMock(return_value={
+        "Clients": {
+            "data": [
+                {"nom": "Dupont", "email": "dupont@mail.com", "age": "35"},
+                {"nom": "Martin", "email": "martin@mail.com", "age": "42"}
+            ],
+            "columns": ["nom", "email", "age"]
+        }
+    })
+    mock_fetcher.format_all_samples_for_prompt = Mock(return_value="Échantillons formatés")
+    
+    return mock_fetcher
+
+
+@pytest.fixture
+def mock_execution_context(sample_document_id, sample_conversation_history, sample_request_id):
+    """Mock de ExecutionContext"""
+    from app.pipeline.context import ExecutionContext
+    from app.config.history_config import default_history_config
+    
+    return ExecutionContext(
+        user_message="Message de test",
+        conversation_history=sample_conversation_history,
+        document_id=sample_document_id,
+        grist_api_key="test-api-key",
+        request_id=sample_request_id,
+        history_config=default_history_config
+    )
 
 
 # ========== FIXTURES MESSAGES ==========

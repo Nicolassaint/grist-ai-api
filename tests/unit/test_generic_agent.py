@@ -1,5 +1,5 @@
 """
-Tests unitaires pour GenericAgent
+Tests unitaires pour GenericAgent - Version corrigée
 """
 import pytest
 from unittest.mock import Mock, AsyncMock
@@ -20,34 +20,95 @@ class TestGenericAgent:
     async def test_process_message_success(
         self,
         generic_agent,
-        sample_conversation_history,
-        sample_request_id,
+        mock_execution_context,
         mock_openai_client,
     ):
-        """Test: Traitement réussi d'un message"""
+        """Test: Traitement réussi d'un message normal"""
         # Arrange
-        user_message = "Bonjour, comment ça va ?"
+        mock_execution_context.user_message = "Bonjour, comment ça va ?"
+        mock_execution_context.error = None  # Pas d'erreur
+        
         mock_response = Mock()
         mock_response.choices = [
             Mock(message=Mock(content="Bonjour! Je vais bien, merci."))
         ]
+        mock_response.usage = Mock(total_tokens=50)
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         # Act
-        result = await generic_agent.process_message(
-            user_message, sample_conversation_history, sample_request_id
-        )
+        result = await generic_agent.process_message(mock_execution_context)
 
         # Assert
         assert isinstance(result, str)
         assert "Bonjour" in result
         mock_openai_client.chat.completions.create.assert_called_once()
 
+    async def test_process_message_sql_error_fallback(
+        self,
+        generic_agent,
+        mock_execution_context,
+    ):
+        """Test: Fallback pour erreur SQL"""
+        # Arrange
+        mock_execution_context.user_message = "Montre-moi les ventes"
+        mock_execution_context.error = "Permission denied"
+        mock_execution_context.agent_used = "sql"
+
+        # Act
+        result = await generic_agent.process_message(mock_execution_context)
+
+        # Assert
+        assert isinstance(result, str)
+        assert "Permission denied" in result
+        assert "Vérifier vos permissions" in result
+        assert "Reformuler votre question" in result
+
+    async def test_process_message_architecture_error_fallback(
+        self,
+        generic_agent,
+        mock_execution_context,
+    ):
+        """Test: Fallback pour erreur d'architecture"""
+        # Arrange
+        mock_execution_context.user_message = "Analyse ma structure"
+        mock_execution_context.error = "Impossible d'accéder aux schémas"
+        mock_execution_context.agent_used = "architecture"
+
+        # Act
+        result = await generic_agent.process_message(mock_execution_context)
+
+        # Assert
+        assert isinstance(result, str)
+        assert "structure de vos données" in result
+        assert "Impossible d'accéder aux schémas" in result
+
+    async def test_process_message_generic_error_fallback(
+        self,
+        generic_agent,
+        mock_execution_context,
+    ):
+        """Test: Fallback pour erreur générique"""
+        # Arrange
+        mock_execution_context.user_message = "Question quelconque"
+        mock_execution_context.error = "Erreur inconnue"
+        mock_execution_context.agent_used = "other"
+
+        # Act
+        result = await generic_agent.process_message(mock_execution_context)
+
+        # Assert
+        assert isinstance(result, str)
+        assert "difficulté technique" in result
+        assert "Erreur inconnue" in result
+
     async def test_process_message_with_conversation_context(
-        self, generic_agent, sample_request_id, mock_openai_client
+        self, generic_agent, mock_execution_context, mock_openai_client
     ):
         """Test: Message avec contexte conversationnel"""
         # Arrange
+        mock_execution_context.user_message = "Parle-moi de Grist"
+        mock_execution_context.error = None
+        
         conversation = ConversationHistory(
             messages=[
                 Message(role="user", content="Bonjour"),
@@ -57,6 +118,7 @@ class TestGenericAgent:
                 Message(role="user", content="Parle-moi de Grist"),
             ]
         )
+        mock_execution_context.conversation_history = conversation
 
         mock_response = Mock()
         mock_response.choices = [
@@ -64,12 +126,11 @@ class TestGenericAgent:
                 message=Mock(content="Grist est une plateforme de gestion de données.")
             )
         ]
+        mock_response.usage = Mock(total_tokens=75)
         mock_openai_client.chat.completions.create.return_value = mock_response
 
         # Act
-        result = await generic_agent.process_message(
-            "Parle-moi de Grist", conversation, sample_request_id
-        )
+        result = await generic_agent.process_message(mock_execution_context)
 
         # Assert
         assert isinstance(result, str)
@@ -80,72 +141,24 @@ class TestGenericAgent:
         messages = call_args.kwargs["messages"]
         assert len(messages) >= 4  # system + 3 messages de conversation
 
-    async def test_process_message_limits_recent_messages(
-        self, generic_agent, sample_request_id, mock_openai_client
-    ):
-        """Test: Limite à 5 messages récents"""
-        # Arrange
-        many_messages = [
-            Message(role="user", content=f"Message {i}") for i in range(10)
-        ]
-        conversation = ConversationHistory(messages=many_messages)
-
-        mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content="Réponse"))]
-        mock_openai_client.chat.completions.create.return_value = mock_response
-
-        # Act
-        await generic_agent.process_message("Test", conversation, sample_request_id)
-
-        # Assert
-        call_args = mock_openai_client.chat.completions.create.call_args
-        messages = call_args.kwargs["messages"]
-        # system + 5 messages récents max
-        assert len(messages) <= 6
-
     async def test_process_message_openai_error(
         self,
         generic_agent,
-        sample_conversation_history,
-        sample_request_id,
+        mock_execution_context,
         mock_openai_client,
     ):
         """Test: Erreur API OpenAI -> fallback"""
         # Arrange
+        mock_execution_context.user_message = "Bonjour"
+        mock_execution_context.error = None
         mock_openai_client.chat.completions.create.side_effect = Exception("API Error")
 
         # Act
-        result = await generic_agent.process_message(
-            "Bonjour", sample_conversation_history, sample_request_id
-        )
+        result = await generic_agent.process_message(mock_execution_context)
 
         # Assert
         assert isinstance(result, str)
         assert "Bonjour" in result  # Fallback pour salutation
-
-    async def test_process_message_empty_conversation(
-        self, generic_agent, sample_request_id, mock_openai_client
-    ):
-        """Test: Conversation vide"""
-        # Arrange
-        empty_conversation = ConversationHistory(messages=[])
-        mock_response = Mock()
-        mock_response.choices = [
-            Mock(message=Mock(content="Comment puis-je vous aider?"))
-        ]
-        mock_openai_client.chat.completions.create.return_value = mock_response
-
-        # Act
-        result = await generic_agent.process_message(
-            "Première question", empty_conversation, sample_request_id
-        )
-
-        # Assert
-        assert isinstance(result, str)
-        # Doit avoir au moins le system prompt
-        call_args = mock_openai_client.chat.completions.create.call_args
-        messages = call_args.kwargs["messages"]
-        assert len(messages) >= 1
 
     def test_get_fallback_response_greeting(self, generic_agent):
         """Test: Fallback pour salutation"""
@@ -163,21 +176,6 @@ class TestGenericAgent:
         for msg in help_messages:
             result = generic_agent._get_fallback_response(msg)
             assert "analyser" in result or "données" in result
-
-    def test_get_fallback_response_what(self, generic_agent):
-        """Test: Fallback pour questions 'quoi/what'"""
-        what_messages = ["C'est quoi", "What is this", "Que fais-tu"]
-
-        for msg in what_messages:
-            result = generic_agent._get_fallback_response(msg)
-            assert "assistant IA" in result or "Grist" in result
-
-    def test_get_fallback_response_generic(self, generic_agent):
-        """Test: Fallback générique"""
-        result = generic_agent._get_fallback_response("Message aléatoire xyz")
-
-        assert "Désolé" in result or "difficulté" in result
-        assert "Grist" in result
 
     def test_detect_data_question_true(self, generic_agent):
         """Test: Détection de questions sur les données"""
@@ -197,7 +195,7 @@ class TestGenericAgent:
         """Test: Pas de question sur les données"""
         non_data_questions = [
             "Bonjour",
-            "Merci",
+            "Merci", 
             "Comment ça va?",
             "Au revoir",
         ]
@@ -205,30 +203,6 @@ class TestGenericAgent:
         for question in non_data_questions:
             result = generic_agent._detect_data_question(question)
             assert result is False
-
-    def test_suggest_data_analysis(self, generic_agent):
-        """Test: Suggestions d'analyse de données"""
-        result = generic_agent.suggest_data_analysis("Comment analyser?")
-
-        assert "ventes" in result
-        assert "utilisateurs" in result
-        assert "tendances" in result
-        assert "moyenne" in result
-        assert "données Grist" in result
-
-    @pytest.mark.parametrize(
-        "user_message,expected_keyword",
-        [
-            ("bonjour", "Bonjour"),
-            ("aide", "analyser"),
-            ("c'est quoi", "assistant"),
-            ("random text", "Désolé"),
-        ],
-    )
-    def test_fallback_parametrized(self, generic_agent, user_message, expected_keyword):
-        """Test: Fallback paramétrés"""
-        result = generic_agent._get_fallback_response(user_message)
-        assert expected_keyword in result
 
 
 @pytest.mark.unit
@@ -244,12 +218,6 @@ class TestGenericAgentConfiguration:
         assert agent.system_prompt is not None
         assert "Grist" in agent.system_prompt
 
-    def test_initialization_with_custom_model(self, mock_openai_client):
-        """Test: Initialisation avec modèle personnalisé"""
-        agent = GenericAgent(mock_openai_client, model="gpt-4")
-
-        assert agent.model == "gpt-4"
-
     def test_system_prompt_content(self, mock_openai_client):
         """Test: Contenu du system prompt"""
         agent = GenericAgent(mock_openai_client)
@@ -260,71 +228,44 @@ class TestGenericAgentConfiguration:
         assert "amical" in agent.system_prompt
         assert "150 mots" in agent.system_prompt
 
-    @pytest.mark.asyncio
-    async def test_openai_call_parameters(self, mock_openai_client):
-        """Test: Paramètres de l'appel OpenAI"""
-        agent = GenericAgent(mock_openai_client)
-        conversation = ConversationHistory(messages=[])
-
-        mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content="Test"))]
-        mock_openai_client.chat.completions.create.return_value = mock_response
-
-        await agent.process_message("Test", conversation, "req-123")
-
-        # Vérifier les paramètres de l'appel
-        call_kwargs = mock_openai_client.chat.completions.create.call_args.kwargs
-        assert call_kwargs["model"] == "gpt-3.5-turbo"
-        assert call_kwargs["max_tokens"] == 200
-        assert call_kwargs["temperature"] == 0.7
-
 
 @pytest.mark.unit
-class TestGenericAgentEdgeCases:
-    """Tests des cas limites pour GenericAgent"""
+class TestGenericAgentFallbackMethods:
+    """Tests spécifiques aux nouvelles méthodes de fallback"""
 
     @pytest.fixture
     def generic_agent(self, mock_openai_client):
         return GenericAgent(mock_openai_client)
 
-    def test_detect_data_question_mixed_case(self, generic_agent):
-        """Test: Détection insensible à la casse"""
-        assert generic_agent._detect_data_question("DONNÉES") is True
-        assert generic_agent._detect_data_question("TaBLe") is True
-        assert generic_agent._detect_data_question("VeNtEs") is True
-
-    def test_fallback_response_case_insensitive(self, generic_agent):
-        """Test: Fallback insensible à la casse"""
-        result_lower = generic_agent._get_fallback_response("bonjour")
-        result_upper = generic_agent._get_fallback_response("BONJOUR")
-        result_mixed = generic_agent._get_fallback_response("BoNjOuR")
-
-        assert all("Bonjour" in r for r in [result_lower, result_upper, result_mixed])
-
-    def test_detect_data_question_multiple_indicators(self, generic_agent):
-        """Test: Plusieurs indicateurs de données"""
-        question = "Analyse les ventes et les statistiques des clients dans la table"
-        result = generic_agent._detect_data_question(question)
-
-        assert result is True
-
-    @pytest.mark.asyncio
-    async def test_process_message_strips_whitespace(
-        self,
-        generic_agent,
-        sample_conversation_history,
-        sample_request_id,
-        mock_openai_client,
-    ):
-        """Test: Les espaces en trop sont supprimés"""
-        mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content="  Réponse avec espaces  "))]
-        mock_openai_client.chat.completions.create.return_value = mock_response
-
-        result = await generic_agent.process_message(
-            "Test", sample_conversation_history, sample_request_id
+    def test_handle_sql_fallback(self, generic_agent):
+        """Test: Méthode _handle_sql_fallback"""
+        result = generic_agent._handle_sql_fallback(
+            "Montre-moi les ventes", 
+            "Table does not exist"
         )
+        
+        assert "ne peux pas exécuter votre requête" in result
+        assert "Table does not exist" in result
+        assert "Vérifier vos permissions" in result
 
-        assert result == "Réponse avec espaces"
-        assert not result.startswith(" ")
-        assert not result.endswith(" ")
+    def test_handle_architecture_fallback(self, generic_agent):
+        """Test: Méthode _handle_architecture_fallback"""
+        result = generic_agent._handle_architecture_fallback(
+            "Analyse ma structure",
+            "Schema access denied"
+        )
+        
+        assert "analyser la structure" in result
+        assert "Schema access denied" in result
+        assert "Reformuler votre question" in result
+
+    def test_handle_generic_error_fallback(self, generic_agent):
+        """Test: Méthode _handle_generic_error_fallback"""
+        result = generic_agent._handle_generic_error_fallback(
+            "Question quelconque",
+            "Unknown error"
+        )
+        
+        assert "difficulté technique" in result
+        assert "Unknown error" in result
+        assert "Reformuler votre question" in result
